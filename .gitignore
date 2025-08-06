@@ -15,6 +15,12 @@ __pycache__/
 *.py[cod]
 *$py.class
 
+# Python 패키지 설치 정보
+*.egg-info/
+crypto_monitor.egg-info/
+dist/
+build/
+
 # 실제 설정 파일 (API 키 포함)
 config.py
 
