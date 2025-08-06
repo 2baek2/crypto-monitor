@@ -4,7 +4,7 @@ import asyncio
 import logging
 from telegram import Bot
 from telegram.error import TelegramError
-from datetime import datetime
+from datetime import datetime, timedelta
 import time
 from typing import Dict, List, Optional, Any
 import json
@@ -68,6 +68,55 @@ class CryptoMonitor:
         
         # 다이버전스 알림 캐시 (중복 방지용)
         self.divergence_alert_cache = {}  # {symbol_timeframe_type: last_alert_time}
+
+    def timeframe_to_minutes(self, timeframe: str) -> int:
+        """타임프레임을 분 단위로 변환합니다."""
+        if timeframe.endswith('m'):
+            return int(timeframe[:-1])
+        elif timeframe.endswith('h'):
+            return int(timeframe[:-1]) * 60
+        elif timeframe.endswith('d'):
+            return int(timeframe[:-1]) * 24 * 60
+        else:
+            # 기본값 (알 수 없는 형식)
+            return 5
+    
+    def get_smallest_timeframe_minutes(self) -> int:
+        """설정된 timeframe 중 가장 작은 것을 분 단위로 반환합니다."""
+        all_timeframes = []
+        
+        # RSI 조건의 timeframes
+        if 'rsi_conditions' in MONITOR_CONDITIONS and MONITOR_CONDITIONS['rsi_conditions'].get('enabled'):
+            all_timeframes.extend(MONITOR_CONDITIONS['rsi_conditions'].get('timeframes', []))
+        
+        # 다이버전스 조건의 timeframes
+        if 'divergence_conditions' in MONITOR_CONDITIONS and MONITOR_CONDITIONS['divergence_conditions'].get('enabled'):
+            all_timeframes.extend(MONITOR_CONDITIONS['divergence_conditions'].get('timeframes', []))
+        
+        if not all_timeframes:
+            return CHECK_INTERVAL_MINUTES  # 기본값
+        
+        # 가장 작은 timeframe 찾기
+        min_minutes = min(self.timeframe_to_minutes(tf) for tf in all_timeframes)
+        return min_minutes
+    
+    def get_next_candle_close_time(self, timeframe_minutes: int) -> datetime:
+        """다음 봉 마감 시간을 계산합니다."""
+        now = datetime.now()
+        
+        # 현재 시간을 timeframe 단위로 올림
+        minutes_since_midnight = now.hour * 60 + now.minute
+        current_candle_start = (minutes_since_midnight // timeframe_minutes) * timeframe_minutes
+        next_candle_start = current_candle_start + timeframe_minutes
+        
+        # 다음 봉 시작 시간 (= 현재 봉 마감 시간)
+        next_candle_time = now.replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(minutes=next_candle_start)
+        
+        # 만약 계산된 시간이 과거라면 다음 날로 이동
+        if next_candle_time <= now:
+            next_candle_time += timedelta(days=1)
+        
+        return next_candle_time
 
     async def get_top_volume_pairs(self, limit: int = None) -> List[Dict]:
         """거래 대금 상위 종목을 가져옵니다."""
@@ -465,15 +514,46 @@ class CryptoMonitor:
             await self.send_telegram_message(error_message)
 
     async def run_continuous_monitoring(self):
-        """지속적인 모니터링을 실행합니다."""
-        logger.info(f"지속적 모니터링 시작 (체크 간격: {CHECK_INTERVAL_MINUTES}분)")
+        """지속적인 모니터링을 스마트 스케줄링으로 실행합니다."""
+        smallest_tf_minutes = self.get_smallest_timeframe_minutes()
+        
+        logger.info(f"지속적 모니터링 시작")
+        logger.info(f"  - 가장 작은 타임프레임: {smallest_tf_minutes}분")
+        logger.info(f"  - 기본 체크 간격: {CHECK_INTERVAL_MINUTES}분")
+        
+        # 첫 번째 즉시 실행
+        logger.info("🚀 시작 시 즉시 모니터링 실행...")
+        try:
+            await self.monitor_markets()
+        except Exception as e:
+            logger.error(f"초기 모니터링 오류: {e}")
+        
+        # 다음 봉 마감까지 대기 후 실행
+        next_candle_time = self.get_next_candle_close_time(smallest_tf_minutes)
+        wait_seconds = (next_candle_time - datetime.now()).total_seconds()
+        
+        if wait_seconds > 0:
+            logger.info(f"⏰ 다음 {smallest_tf_minutes}분봉 마감까지 {wait_seconds:.0f}초 대기...")
+            logger.info(f"   다음 실행 시간: {next_candle_time.strftime('%Y-%m-%d %H:%M:%S')}")
+            await asyncio.sleep(wait_seconds)
+        
+        # 봉 마감 시점에 한 번 실행
+        logger.info(f"📊 {smallest_tf_minutes}분봉 마감 - 모니터링 실행...")
+        try:
+            await self.monitor_markets()
+        except Exception as e:
+            logger.error(f"봉 마감 시점 모니터링 오류: {e}")
+        
+        # 이후부터는 정기적인 간격으로 실행
+        logger.info(f"🔄 정기 모니터링 시작 (간격: {CHECK_INTERVAL_MINUTES}분)")
         
         while True:
             try:
-                await self.monitor_markets()
-                
-                # 다음 체크까지 대기
+                # CHECK_INTERVAL_MINUTES 간격으로 대기
                 await asyncio.sleep(CHECK_INTERVAL_MINUTES * 60)
+                
+                logger.info(f"⏰ 정기 모니터링 실행 ({datetime.now().strftime('%H:%M:%S')})")
+                await self.monitor_markets()
                 
             except KeyboardInterrupt:
                 logger.info("사용자에 의해 모니터링이 중단되었습니다.")

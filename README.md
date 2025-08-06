@@ -25,11 +25,18 @@ Gate.io API를 활용하여 암호화폐 시장을 모니터링하고, RSI 기�
 ### 🔍 RSI 다이버전스 감지
 
 - **Regular Bullish**: 가격 Lower Low + RSI Higher Low (강한 매수 신호)
-- **Regular Bearish**: 가격 Higher High + RSI Lower High (강한 매도 신호)  
+- **Regular Bearish**: 가격 Higher High + RSI Lower High (강한 매도 신호)
 - **Hidden Bullish**: 가격 Higher Low + RSI Lower Low (상승 추세 지속)
 - **Hidden Bearish**: 가격 Lower High + RSI Higher High (하락 추세 지속)
 - **스마트 필터링**: 최근 5봉에서 발생한 다이버전스만 감지
 - **쿨다운 시스템**: 30분간 동일 신호 중복 방지
+
+### ⏰ 스마트 스케줄링
+
+- **즉시 실행**: 시스템 시작 시 바로 한 번 모니터링 실행
+- **봉 마감 동기화**: 설정된 가장 작은 timeframe 봉 마감 시점에 실행
+- **정기 모니터링**: 이후 `CHECK_INTERVAL_MINUTES` 간격으로 주기 실행
+- **효율적 타이밍**: 새로운 봉 데이터가 확정되는 시점에 분석 수행
 
 ## 🛠️ 설치
 
@@ -101,7 +108,7 @@ MONITOR_CONDITIONS = {
         "oversold": 30,                 # 과매도 기준
         "overbought": 70                # 과매수 기준
     },
-    
+
     # RSI 다이버전스 감지 (Pine Script 알고리즘)
     "divergence_conditions": {
         "enabled": True,
@@ -135,6 +142,9 @@ python test_divergence.py
 
 # 쿨다운 시스템 테스트
 python test_simple_cooldown.py
+
+# 스마트 스케줄링 테스트
+python test_scheduling.py
 ```
 
 ### 모니터링 실행
