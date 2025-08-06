@@ -29,7 +29,13 @@ Gate.io API를 활용하여 암호화폐 시장을 모니터링하고, RSI 기�
 - **Hidden Bullish**: 가격 Higher Low + RSI Lower Low (상승 추세 지속)
 - **Hidden Bearish**: 가격 Lower High + RSI Higher High (하락 추세 지속)
 - **스마트 필터링**: 최근 5봉에서 발생한 다이버전스만 감지
-- **쿨다운 시스템**: 30분간 동일 신호 중복 방지
+
+### 🛡️ 통합 알림 쿨다운 시스템
+
+- **전체 조건 적용**: RSI, 다이버전스, 가격 변동, 거래량 등 모든 알림 조건에 쿨다운 적용
+- **조건별 개별 관리**: 각 조건 타입별로 독립적인 쿨다운 (설정 가능)
+- **스팸 방지**: 30분간 동일 조건 중복 알림 차단 (설정 가능)
+- **심볼별 세분화**: 같은 심볼이라도 다른 조건은 독립적으로 알림
 
 ### ⏰ 스마트 스케줄링
 
@@ -38,33 +44,49 @@ Gate.io API를 활용하여 암호화폐 시장을 모니터링하고, RSI 기�
 - **정기 모니터링**: 이후 `CHECK_INTERVAL_MINUTES` 간격으로 주기 실행
 - **효율적 타이밍**: 새로운 봉 데이터가 확정되는 시점에 분석 수행
 
+### 🔧 uv 패키지 관리자
+
+- **빠른 설치**: Rust로 작성된 초고속 Python 패키지 관리자
+- **자동 의존성**: pyproject.toml 기반 현대적 패키지 관리
+- **가상환경 통합**: 별도 venv 생성/활성화 없이 바로 실행
+- **설정 보존**: 업데이트 시 기존 API 키/토큰 자동 보존
+
 ## 🛠️ 설치
 
 ### 1. 저장소 클론
 
 ```bash
-git clone https://github.com/[your-username]/crypto-rsi-monitor.git
-cd crypto-rsi-monitor
+git clone https://github.com/2baek2/crypto-monitor.git
+cd crypto-monitor
 ```
 
-### 2. Python 가상환경 생성 및 활성화
+### 2. uv 설치 (권장)
 
 ```bash
-python -m venv .venv
-source .venv/bin/activate  # Linux/Mac
-# .venv\Scripts\activate   # Windows
+# macOS/Linux
+curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# macOS (Homebrew)
+brew install uv
+
+# Windows
+powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
 ```
 
-### 3. 필요한 패키지 설치
+### 3. 자동 설치 및 설정
 
 ```bash
-pip install -r requirements.txt
+chmod +x install.sh
+./install.sh
 ```
 
-### 4. 설정 파일 생성
+### 4. 설정 파일 편집 (필요시)
+
+install.sh가 기존 설정을 자동으로 보존하지만, 처음 설치시에는 수동 설정이 필요합니다:
 
 ```bash
-cp config.example.py config.py
+# config.py 파일을 편집하여 텔레그램 설정 입력
+nano config.py  # 또는 다른 에디터 사용
 ```
 
 ## ⚙️ 설정
@@ -116,10 +138,16 @@ MONITOR_CONDITIONS = {
         "rsi_period": 14,               # RSI 계산 기간
         "lookback_range": [5, 60],      # 피벗 포인트 검색 범위
         "include_hidden": False,        # Hidden 다이버전스 포함 여부
-        "recent_bars_only": 5,          # 최근 N봉에서만 감지
-        "cooldown_minutes": 30          # 중복 알림 방지 (분)
+        "recent_bars_only": 5           # 최근 N봉에서만 감지
     }
     # 기타 조건들...
+}
+
+# 통합 알림 쿨다운 설정
+ALERT_COOLDOWN = {
+    "enabled": True,                    # 쿨다운 시스템 활성화
+    "cooldown_minutes": 30,             # 알림 간격 (분)
+    "per_condition_type": True          # 조건별 개별 쿨다운 (True) 또는 심볼 전체 (False)
 }
 ```
 
@@ -128,33 +156,49 @@ MONITOR_CONDITIONS = {
 ### 빠른 설정 및 테스트
 
 ```bash
-# 자동 설정 도우미
-python setup.py
+# 자동 설정 도우미 (권장)
+./install.sh
 
 # 기본 시스템 테스트
-python test.py
+uv run python test/test.py
+# 또는: ./run.sh test
 
 # RSI 분석 테스트
-python test_rsi.py
+uv run python test/test_rsi.py
+# 또는: ./run.sh test-rsi
 
 # RSI 다이버전스 테스트
-python test_divergence.py
+uv run python test/test_divergence.py
+# 또는: ./run.sh test-div
 
-# 쿨다운 시스템 테스트
-python test_simple_cooldown.py
+# 모든 테스트 실행
+./run.sh test-all
 
 # 스마트 스케줄링 테스트
-python test_scheduling.py
+uv run python test/test_scheduling.py
+# 또는: ./run.sh schedule
+
+# 통합 쿨다운 시스템 테스트
+uv run python test/test_unified_cooldown.py
+# 또는: ./run.sh cooldown
 ```
 
 ### 모니터링 실행
 
 ```bash
 # 한 번만 실행 (테스트용)
-python crypto_monitor.py once
+uv run python crypto_monitor.py once
 
 # 지속적 모니터링 시작
-python crypto_monitor.py
+uv run python crypto_monitor.py
+```
+
+### 설정 업데이트
+
+config.example.py가 업데이트되어도 기존 API 키와 토큰을 보존하면서 자동 업데이트:
+
+```bash
+python update_config.py
 ```
 
 ## 📊 알림 예시
@@ -197,17 +241,41 @@ BTC (BTC_USDT)
 ## 📁 프로젝트 구조
 
 ```
-crypto-rsi-monitor/
-├── crypto_monitor.py          # 🎯 메인 모니터링 스크립트
-├── technical_analysis.py      # 📈 RSI 기술적 분석 모듈
-├── config.py                  # ⚙️ 설정 파일 (gitignore)
-├── config.example.py          # 📋 설정 예시 파일
-├── watchlist.py              # 📝 관심종목 리스트
-├── setup.py                  # 🛠️ 초기 설정 도우미
-├── test*.py                  # 🧪 다양한 테스트 스크립트
-├── requirements.txt          # 📦 필요한 패키지 목록
-└── README.md                 # 📖 사용 설명서
+crypto-monitor/
+├── 📄 crypto_monitor.py          # 메인 모니터링 시스템
+├── 📄 technical_analysis.py      # RSI 및 다이버전스 분석
+├── 📄 watchlist.py              # 관심 종목 설정
+├── 📄 utils.py                  # 유틸리티 함수
+├── 📄 update_config.py          # 설정 업데이트 도구
+├── 📄 run_tests.py              # 통합 테스트 실행기
+├── 📄 config.example.py         # 설정 파일 예시
+├── 📄 pyproject.toml            # uv 프로젝트 설정
+├── 📄 requirements.txt          # Python 의존성
+├── 🔧 install.sh               # 자동 설치 스크립트
+├── 🔧 run.sh                   # 실행 도우미 스크립트
+├── 📁 test/                    # 테스트 모듈
+│   ├── 📄 __init__.py
+│   ├── 📄 test.py              # 기본 시스템 테스트
+│   ├── 📄 test_rsi.py          # RSI 분석 테스트
+│   ├── 📄 test_divergence.py   # 다이버전스 테스트
+│   ├── 📄 test_scheduling.py   # 스케줄링 테스트
+│   ├── 📄 test_unified_cooldown.py # 쿨다운 시스템 테스트
+│   └── 📄 ...                  # 기타 테스트 파일들
+└── 📄 README.md                # 프로젝트 문서
 ```
+
+crypto-rsi-monitor/
+├── crypto_monitor.py # 🎯 메인 모니터링 스크립트
+├── technical_analysis.py # 📈 RSI 기술적 분석 모듈
+├── config.py # ⚙️ 설정 파일 (gitignore)
+├── config.example.py # 📋 설정 예시 파일
+├── watchlist.py # 📝 관심종목 리스트
+├── setup.py # 🛠️ 초기 설정 도우미
+├── test\*.py # 🧪 다양한 테스트 스크립트
+├── requirements.txt # 📦 필요한 패키지 목록
+└── README.md # 📖 사용 설명서
+
+````
 
 ## 🧪 테스트 명령어
 
@@ -216,7 +284,7 @@ python test.py                    # 전체 시스템 테스트
 python test_rsi.py               # RSI 분석 기능 테스트
 python test_rsi_signals.py       # RSI 신호 검색 테스트
 python test_telegram_rsi.py      # 텔레그램 RSI 알림 테스트
-```
+````
 
 ## ⚠️ 주의사항
 

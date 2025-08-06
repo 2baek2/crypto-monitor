@@ -22,7 +22,22 @@ MONITOR_CONDITIONS = {
         "periods": [7, 14, 21],             # RSI 계산 기간
         "oversold": 30,                     # 과매도 기준 (RSI ≤ 30)
         "overbought": 70                    # 과매수 기준 (RSI ≥ 70)
+    },
+    "divergence_conditions": {
+        "enabled": True,
+        "timeframes": ["5m", "15m"],        # 다이버전스 분석 시간대
+        "rsi_period": 14,                   # RSI 계산 기간
+        "lookback_range": [5, 60],          # 피벗 포인트 검색 범위
+        "include_hidden": False,            # Hidden 다이버전스 포함 여부
+        "recent_bars_only": 5               # 최근 N봉에서만 감지
     }
+}
+
+# 알림 쿨다운 설정
+ALERT_COOLDOWN = {
+    "enabled": True,                        # 쿨다운 시스템 활성화
+    "cooldown_minutes": 30,                 # 같은 조건에 대한 알림 간격 (분)
+    "per_condition_type": True              # 조건 타입별로 개별 쿨다운 적용 (True) 또는 심볼 전체 쿨다운 (False)
 }
 
 # 거래소 및 모니터링 설정

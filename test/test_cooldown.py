@@ -2,6 +2,11 @@
 """
 쿨다운 시스템 테스트
 """
+import sys
+import os
+# 상위 디렉터리(프로젝트 루트)를 Python path에 추가
+sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'))
+
 import asyncio
 import time
 from crypto_monitor import CryptoMonitor
@@ -83,13 +88,13 @@ async def test_cooldown():
                             elif "Hidden Bearish" in divergence_msg:
                                 div_type = "hidden_bearish"
                             
-                            # 쿨다운 키 생성
-                            cooldown_key = f"{symbol}_{timeframe}_{rsi_period}_{div_type}"
+                            # 쿨다운 키 생성 (새로운 통합 형식)
+                            cooldown_key = f"{symbol}_{timeframe}_divergence_{div_type}"
                             current_time = time.time()
                             
                             # 쿨다운 확인
-                            if cooldown_key in monitor.divergence_alert_cache:
-                                last_alert_time = monitor.divergence_alert_cache[cooldown_key].timestamp()
+                            if cooldown_key in monitor.alert_cache:
+                                last_alert_time = monitor.alert_cache[cooldown_key].timestamp()
                                 time_diff = (current_time - last_alert_time) / 60  # 분 단위
                                 
                                 if time_diff < cooldown_minutes:
@@ -99,7 +104,7 @@ async def test_cooldown():
                             # 쿨다운이 지났거나 첫 번째 알림인 경우
                             alerts.append(divergence_msg)
                             from datetime import datetime
-                            monitor.divergence_alert_cache[cooldown_key] = datetime.now()
+                            monitor.alert_cache[cooldown_key] = datetime.now()
                             
         except Exception as e:
             print(f"❌ {symbol} 테스트 오류: {e}")

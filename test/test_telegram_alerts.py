@@ -2,6 +2,10 @@
 """
 수정된 다이버전스 알림 시스템 테스트
 """
+import sys
+import os
+# 상위 디렉터리(프로젝트 루트)를 Python path에 추가
+sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'))
 
 import asyncio
 import logging

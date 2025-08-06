@@ -11,7 +11,7 @@ import json
 
 from config import (
     GATE_API_KEY, GATE_API_SECRET, TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID,
-    MONITOR_CONDITIONS, CHECK_INTERVAL_MINUTES, MARKET_SETTINGS
+    MONITOR_CONDITIONS, CHECK_INTERVAL_MINUTES, MARKET_SETTINGS, ALERT_COOLDOWN
 )
 from watchlist import WATCHLIST
 from technical_analysis import TechnicalAnalyzer
@@ -66,8 +66,8 @@ class CryptoMonitor:
         # 이전 데이터 저장용
         self.previous_data = {}
         
-        # 다이버전스 알림 캐시 (중복 방지용)
-        self.divergence_alert_cache = {}  # {symbol_timeframe_type: last_alert_time}
+        # 전체 알림 캐시 (중복 방지용)
+        self.alert_cache = {}  # {cache_key: last_alert_time}
 
     def timeframe_to_minutes(self, timeframe: str) -> int:
         """타임프레임을 분 단위로 변환합니다."""
@@ -117,6 +117,42 @@ class CryptoMonitor:
             next_candle_time += timedelta(days=1)
         
         return next_candle_time
+
+    def generate_alert_cache_key(self, symbol: str, condition_type: str, additional_info: str = "") -> str:
+        """알림 캐시 키를 생성합니다."""
+        if ALERT_COOLDOWN.get('per_condition_type', True):
+            # 조건 타입별 개별 쿨다운
+            if additional_info:
+                return f"{symbol}_{condition_type}_{additional_info}"
+            else:
+                return f"{symbol}_{condition_type}"
+        else:
+            # 심볼 전체 쿨다운
+            return symbol
+    
+    def is_alert_in_cooldown(self, cache_key: str) -> bool:
+        """알림이 쿨다운 중인지 확인합니다."""
+        if not ALERT_COOLDOWN.get('enabled', False):
+            return False
+            
+        if cache_key not in self.alert_cache:
+            return False
+            
+        last_alert_time = self.alert_cache[cache_key]
+        current_time = datetime.now()
+        time_diff_minutes = (current_time - last_alert_time).total_seconds() / 60
+        cooldown_minutes = ALERT_COOLDOWN.get('cooldown_minutes', 30)
+        
+        if time_diff_minutes < cooldown_minutes:
+            logger.debug(f"알림 쿨다운 중: {cache_key} ({time_diff_minutes:.1f}분 경과/{cooldown_minutes}분 필요)")
+            return True
+            
+        return False
+    
+    def update_alert_cache(self, cache_key: str):
+        """알림 캐시를 업데이트합니다."""
+        if ALERT_COOLDOWN.get('enabled', False):
+            self.alert_cache[cache_key] = datetime.now()
 
     async def get_top_volume_pairs(self, limit: int = None) -> List[Dict]:
         """거래 대금 상위 종목을 가져옵니다."""
@@ -221,15 +257,28 @@ class CryptoMonitor:
             if 'price_change_24h_percent' in conditions:
                 condition = conditions['price_change_24h_percent']
                 if 'min' in condition and price_change_24h <= condition['min']:
-                    alerts.append(f"📉 24시간 가격 변동률: {price_change_24h:.2f}% (임계값: {condition['min']}% 이하)")
+                    cache_key = self.generate_alert_cache_key(symbol, "price_drop", f"{condition['min']}")
+                    if not self.is_alert_in_cooldown(cache_key):
+                        alert_msg = f"📉 24시간 가격 변동률: {price_change_24h:.2f}% (임계값: {condition['min']}% 이하)"
+                        alerts.append(alert_msg)
+                        self.update_alert_cache(cache_key)
+                        
                 if 'max' in condition and price_change_24h >= condition['max']:
-                    alerts.append(f"📈 24시간 가격 변동률: {price_change_24h:.2f}% (임계값: {condition['max']}% 이상)")
+                    cache_key = self.generate_alert_cache_key(symbol, "price_rise", f"{condition['max']}")
+                    if not self.is_alert_in_cooldown(cache_key):
+                        alert_msg = f"📈 24시간 가격 변동률: {price_change_24h:.2f}% (임계값: {condition['max']}% 이상)"
+                        alerts.append(alert_msg)
+                        self.update_alert_cache(cache_key)
             
             # 거래량 변화 조건 확인
             if 'volume_change_24h' in conditions:
                 condition = conditions['volume_change_24h']
                 if 'min' in condition and volume_change >= condition['min']:
-                    alerts.append(f"📊 거래량 증가: {volume_change:.2f}배 (임계값: {condition['min']}배 이상)")
+                    cache_key = self.generate_alert_cache_key(symbol, "volume_surge", f"{condition['min']}")
+                    if not self.is_alert_in_cooldown(cache_key):
+                        alert_msg = f"📊 거래량 증가: {volume_change:.2f}배 (임계값: {condition['min']}배 이상)"
+                        alerts.append(alert_msg)
+                        self.update_alert_cache(cache_key)
             
             # RSI 조건 확인
             if 'rsi_conditions' in conditions and conditions['rsi_conditions'].get('enabled', False):
@@ -242,7 +291,21 @@ class CryptoMonitor:
                 rsi_alerts = self.technical_analyzer.analyze_rsi_conditions(
                     symbol, timeframes, periods, oversold, overbought
                 )
-                alerts.extend(rsi_alerts)
+                
+                # RSI 알림에 쿨다운 적용
+                for rsi_alert in rsi_alerts:
+                    # RSI 알림 타입 파악 (과매도/과매수/시간프레임 정보 포함)
+                    alert_type = "rsi_oversold" if "과매도" in rsi_alert else "rsi_overbought"
+                    timeframe_info = ""
+                    for tf in timeframes:
+                        if tf in rsi_alert:
+                            timeframe_info = tf
+                            break
+                    
+                    cache_key = self.generate_alert_cache_key(symbol, alert_type, timeframe_info)
+                    if not self.is_alert_in_cooldown(cache_key):
+                        alerts.append(rsi_alert)
+                        self.update_alert_cache(cache_key)
             
             # RSI 다이버전스 조건 확인
             if 'divergence_conditions' in conditions and conditions['divergence_conditions'].get('enabled', False):
@@ -252,7 +315,6 @@ class CryptoMonitor:
                 lookback_range = tuple(div_config.get('lookback_range', [5, 60]))
                 include_hidden = div_config.get('include_hidden', False)
                 recent_bars_only = div_config.get('recent_bars_only', 5)
-                cooldown_minutes = div_config.get('cooldown_minutes', 30)
                 
                 for timeframe in div_timeframes:
                     try:
@@ -267,36 +329,25 @@ class CryptoMonitor:
                                 if "Hidden" not in alert
                             ]
                         
-                        if divergence_alerts:
-                            # 각 다이버전스 신호에 대해 쿨다운 확인
-                            for divergence_msg in divergence_alerts:
-                                # 다이버전스 타입 추출
-                                div_type = "unknown"
-                                if "Regular Bullish" in divergence_msg:
-                                    div_type = "regular_bullish"
-                                elif "Regular Bearish" in divergence_msg:
-                                    div_type = "regular_bearish"
-                                elif "Hidden Bullish" in divergence_msg:
-                                    div_type = "hidden_bullish"
-                                elif "Hidden Bearish" in divergence_msg:
-                                    div_type = "hidden_bearish"
-                                
-                                # 쿨다운 키 생성
-                                cooldown_key = f"{symbol}_{timeframe}_{rsi_period}_{div_type}"
-                                current_time = datetime.now()
-                                
-                                # 쿨다운 확인
-                                if cooldown_key in self.divergence_alert_cache:
-                                    last_alert_time = self.divergence_alert_cache[cooldown_key]
-                                    time_diff = (current_time - last_alert_time).total_seconds() / 60  # 분 단위
-                                    
-                                    if time_diff < cooldown_minutes:
-                                        logger.debug(f"{symbol} 다이버전스 알림 쿨다운 중: {time_diff:.1f}분 경과 (필요: {cooldown_minutes}분)")
-                                        continue
-                                
-                                # 쿨다운이 지났거나 첫 번째 알림인 경우
+                        # 다이버전스 알림에 쿨다운 적용
+                        for divergence_msg in divergence_alerts:
+                            # 다이버전스 타입 추출
+                            div_type = "unknown"
+                            if "Regular Bullish" in divergence_msg:
+                                div_type = "regular_bullish"
+                            elif "Regular Bearish" in divergence_msg:
+                                div_type = "regular_bearish"
+                            elif "Hidden Bullish" in divergence_msg:
+                                div_type = "hidden_bullish"
+                            elif "Hidden Bearish" in divergence_msg:
+                                div_type = "hidden_bearish"
+                            
+                            cache_key = self.generate_alert_cache_key(symbol, "divergence", f"{timeframe}_{div_type}")
+                            if not self.is_alert_in_cooldown(cache_key):
                                 alerts.append(divergence_msg)
-                                self.divergence_alert_cache[cooldown_key] = current_time
+                                self.update_alert_cache(cache_key)
+                                
+                        if divergence_alerts:
                             logger.info(f"다이버전스 신호 발견: {symbol} {timeframe} - {len(divergence_alerts)}개")
                             
                     except Exception as e:

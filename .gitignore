@@ -6,6 +6,10 @@ crypto_monitor.log
 venv/
 env/
 
+# uv 관련
+.python-version
+uv.lock
+
 # 바이트코드 파일
 __pycache__/
 *.py[cod]
@@ -16,6 +20,7 @@ config.py
 
 # 설정 파일 백업
 config.py.bak
+config.py.backup.*
 .env
 .env.local
 

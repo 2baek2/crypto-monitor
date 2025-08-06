@@ -7,7 +7,8 @@ Gate.io API 연결 및 기본 기능을 테스트합니다.
 import asyncio
 import sys
 import os
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+# 상위 디렉터리(프로젝트 루트)를 Python path에 추가
+sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'))
 
 from crypto_monitor import CryptoMonitor
 import logging
@@ -34,10 +35,10 @@ async def test_api_connection():
             
             print("\n📊 거래량 상위 5개 종목:")
             for i, ticker in enumerate(top_pairs[:5], 1):
-                symbol = ticker.currency_pair
+                symbol = ticker.contract
                 price = float(ticker.last)
                 change_24h = float(ticker.change_percentage)
-                volume_24h = float(ticker.quote_volume)
+                volume_24h = float(ticker.volume_24h_quote)
                 
                 print(f"{i}. {symbol}")
                 print(f"   가격: ${price:,.4f}")

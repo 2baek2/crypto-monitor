@@ -2,6 +2,11 @@
 """
 쿨다운 시스템 간단 테스트
 """
+import sys
+import os
+# 상위 디렉터리(프로젝트 루트)를 Python path에 추가
+sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'))
+
 import asyncio
 import time
 from datetime import datetime
@@ -13,11 +18,11 @@ async def simple_cooldown_test():
     
     print("🧪 쿨다운 시스템 간단 테스트...")
     print("📊 현재 쿨다운 캐시 상태:")
-    print(f"  - 캐시 크기: {len(monitor.divergence_alert_cache)}")
+    print(f"  - 캐시 크기: {len(monitor.alert_cache)}")
     
     # 테스트용 가짜 알림 추가
-    test_key = "BTC_USDT_5m_14_regular_bullish"
-    monitor.divergence_alert_cache[test_key] = datetime.now()
+    test_key = "BTC_USDT_5m_rsi_oversold"
+    monitor.alert_cache[test_key] = datetime.now()
     
     print(f"  - 테스트 키 추가: {test_key}")
     print(f"  - 현재 시간: {datetime.now()}")
@@ -26,8 +31,8 @@ async def simple_cooldown_test():
     print("\n💤 30초 대기...")
     time.sleep(30)
     
-    if test_key in monitor.divergence_alert_cache:
-        last_time = monitor.divergence_alert_cache[test_key]
+    if test_key in monitor.alert_cache:
+        last_time = monitor.alert_cache[test_key]
         time_diff = (datetime.now() - last_time).total_seconds() / 60
         print(f"✅ 캐시에서 발견: {time_diff:.2f}분 경과")
         
