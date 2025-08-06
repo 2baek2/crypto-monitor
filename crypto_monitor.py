@@ -441,10 +441,10 @@ class CryptoMonitor:
 
     def _format_futures_ticker(self, ticker: Any) -> str:
         """퓨처스 티커 정보를 포맷팅합니다."""
-        symbol = ticker.contract
+        symbol = getattr(ticker, 'contract', getattr(ticker, 'currency_pair', 'Unknown'))
         price = float(ticker.last)
         change_24h = float(ticker.change_percentage)
-        volume_24h = float(getattr(ticker, 'volume_24h_usdt', ticker.volume_24h))
+        volume_24h = float(getattr(ticker, 'volume_24h_usdt', getattr(ticker, 'volume_24h', 0)))
         high_24h = float(ticker.high_24h)
         low_24h = float(ticker.low_24h)
         
@@ -484,7 +484,7 @@ class CryptoMonitor:
             # 거래 대금 상위 종목 추가
             for ticker in top_volume_pairs:
                 if self.market_type == 'futures':
-                    all_symbols_to_check.add(ticker.contract)
+                    all_symbols_to_check.add(getattr(ticker, 'contract', getattr(ticker, 'currency_pair', 'Unknown')))
                 else:
                     all_symbols_to_check.add(ticker.currency_pair)
             
@@ -544,7 +544,7 @@ class CryptoMonitor:
                 top_5_message = f"📊 <b>오늘의 {market_name} 거래 대금 상위 5개 종목</b>\n\n"
                 for i, ticker in enumerate(top_volume_pairs[:5], 1):
                     if self.market_type == 'futures':
-                        symbol = ticker.contract
+                        symbol = getattr(ticker, 'contract', getattr(ticker, 'currency_pair', 'Unknown'))
                         volume_24h = float(getattr(ticker, 'volume_24h_settle', ticker.volume_24h))
                     else:
                         symbol = ticker.currency_pair
