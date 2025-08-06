@@ -25,5 +25,13 @@ MONITOR_CONDITIONS = {
     }
 }
 
+# 거래소 및 모니터링 설정
+MARKET_SETTINGS = {
+    "market_type": "futures",         # "spot" 또는 "futures"
+    "settle": "usdt",                # futures 결제 통화 (usdt, btc)
+    "top_volume_limit": 50,          # 거래량 상위 몇 개 종목을 모니터링할지
+    "max_alerts_per_cycle": 5        # 한 번에 최대 몇 개의 알림을 보낼지
+}
+
 # 체크 주기 (분)
 CHECK_INTERVAL_MINUTES = 30

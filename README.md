@@ -7,27 +7,41 @@ Gate.io API를 활용하여 암호화폐 시장을 모니터링하고, RSI 기�
 
 ## ✨ 주요 기능
 
-- 🔥 **거래량 상위 30개 종목 실시간 모니터링**
-- 📊 **사용자 정의 관심종목 모니터링** 
+- 🔥 **거래량/거래대금 상위 종목 실시간 모니터링** (Spot/Futures 지원)
+- 📊 **사용자 정의 관심종목 모니터링**
 - 📈 **RSI 기술적 분석** (5분봉, 15분봉)
+- 🎯 **RSI 다이버전스 감지** (Pine Script 알고리즘 기반)
 - 💹 **가격 변동률 및 거래량 조건 확인**
-- 📱 **텔레그램 실시간 알림**
+- 📱 **텔레그램 실시간 알림** (HTML 안전 처리)
+- ⏰ **중복 알림 방지** (쿨다운 시스템)
 
 ### 🎯 RSI 기술적 분석
+
 - **지원 시간대**: 5분봉, 15분봉
 - **RSI 기간**: 7, 14, 21
 - **과매도 신호**: RSI ≤ 30 (매수 타이밍)
 - **과매수 신호**: RSI ≥ 70 (매도 타이밍)
 
+### 🔍 RSI 다이버전스 감지
+
+- **Regular Bullish**: 가격 Lower Low + RSI Higher Low (강한 매수 신호)
+- **Regular Bearish**: 가격 Higher High + RSI Lower High (강한 매도 신호)  
+- **Hidden Bullish**: 가격 Higher Low + RSI Lower Low (상승 추세 지속)
+- **Hidden Bearish**: 가격 Lower High + RSI Higher High (하락 추세 지속)
+- **스마트 필터링**: 최근 5봉에서 발생한 다이버전스만 감지
+- **쿨다운 시스템**: 30분간 동일 신호 중복 방지
+
 ## 🛠️ 설치
 
 ### 1. 저장소 클론
+
 ```bash
 git clone https://github.com/[your-username]/crypto-rsi-monitor.git
 cd crypto-rsi-monitor
 ```
 
 ### 2. Python 가상환경 생성 및 활성화
+
 ```bash
 python -m venv .venv
 source .venv/bin/activate  # Linux/Mac
@@ -35,11 +49,13 @@ source .venv/bin/activate  # Linux/Mac
 ```
 
 ### 3. 필요한 패키지 설치
+
 ```bash
 pip install -r requirements.txt
 ```
 
 ### 4. 설정 파일 생성
+
 ```bash
 cp config.example.py config.py
 ```
@@ -49,6 +65,7 @@ cp config.example.py config.py
 ### 📱 Telegram Bot 설정 (필수)
 
 1. **Bot 생성**:
+
    - Telegram에서 [@BotFather](https://t.me/botfather)와 대화
    - `/newbot` 명령어로 새 봇 생성
    - 봇 토큰을 받아 `config.py`에 입력
@@ -69,6 +86,12 @@ TELEGRAM_CHAT_ID = "your_chat_id_here"
 GATE_API_KEY = "your_api_key_here"      # 비워둬도 됨
 GATE_API_SECRET = "your_api_secret_here"  # 비워둬도 됨
 
+# 시장 설정
+MARKET_SETTINGS = {
+    "market_type": "futures",           # "spot" 또는 "futures"
+    "top_volume_limit": 30             # 모니터링할 상위 종목 수
+}
+
 # RSI 모니터링 조건
 MONITOR_CONDITIONS = {
     "rsi_conditions": {
@@ -78,6 +101,17 @@ MONITOR_CONDITIONS = {
         "oversold": 30,                 # 과매도 기준
         "overbought": 70                # 과매수 기준
     },
+    
+    # RSI 다이버전스 감지 (Pine Script 알고리즘)
+    "divergence_conditions": {
+        "enabled": True,
+        "timeframes": ["5m", "15m"],    # 다이버전스 분석 시간대
+        "rsi_period": 14,               # RSI 계산 기간
+        "lookback_range": [5, 60],      # 피벗 포인트 검색 범위
+        "include_hidden": False,        # Hidden 다이버전스 포함 여부
+        "recent_bars_only": 5,          # 최근 N봉에서만 감지
+        "cooldown_minutes": 30          # 중복 알림 방지 (분)
+    }
     # 기타 조건들...
 }
 ```
@@ -85,18 +119,26 @@ MONITOR_CONDITIONS = {
 ## 🚀 사용법
 
 ### 빠른 설정 및 테스트
+
 ```bash
 # 자동 설정 도우미
 python setup.py
 
-# 시스템 테스트
+# 기본 시스템 테스트
 python test.py
 
 # RSI 분석 테스트
 python test_rsi.py
+
+# RSI 다이버전스 테스트
+python test_divergence.py
+
+# 쿨다운 시스템 테스트
+python test_simple_cooldown.py
 ```
 
 ### 모니터링 실행
+
 ```bash
 # 한 번만 실행 (테스트용)
 python crypto_monitor.py once
@@ -108,6 +150,7 @@ python crypto_monitor.py
 ## 📊 알림 예시
 
 ### RSI 과매도/과매수 알림
+
 ```
 🚨 RSI 알림: ASP_USDT
 
@@ -123,6 +166,22 @@ ASP (ASP_USDT)
 • 📉 15m 과매도 신호: RSI(7): 22.66
 
 ⏰ 시간: 2024-01-15 14:30:00
+```
+
+### RSI 다이버전스 알림
+
+```
+🚨 다이버전스 알림: BTC_USDT
+
+BTC (BTC_USDT)
+💰 현재가: $42,350.00
+📊 24h 변동률: -2.15%
+
+조건 충족:
+• 🟢 Regular Bullish Divergence (5m): 가격 42180.50 ↓ 42285.75, RSI 28.45 ↑ 25.12
+• 🟡 Hidden Bullish Divergence (15m): 가격 42280.00 ↑ 42180.50, RSI 32.15 ↓ 35.82
+
+⏰ 시간: 2024-01-15 14:45:00
 ```
 
 ## 📁 프로젝트 구조
@@ -170,6 +229,7 @@ MIT License - 자세한 내용은 [LICENSE](LICENSE) 파일을 참고하세요.
 ## 설치 및 설정
 
 ### 1. 필요한 패키지가 이미 설치되어 있습니다:
+
 - gate-api (Gate.io API 클라이언트)
 - requests (HTTP 요청)
 - python-telegram-bot (텔레그램 봇)
@@ -194,6 +254,7 @@ TELEGRAM_CHAT_ID = "your_telegram_chat_id_here"
 ### 3. Telegram Bot 설정 방법
 
 1. **Bot 생성**:
+
    - Telegram에서 @BotFather와 대화
    - `/newbot` 명령어 입력
    - 봇 이름과 사용자명 설정
@@ -244,6 +305,7 @@ MONITOR_CONDITIONS = {
 ## 추가 테스트 명령어
 
 ### RSI 분석 테스트
+
 ```bash
 python test_rsi.py              # RSI 계산 및 분석 테스트
 python test_rsi_signals.py      # RSI 신호 검색 테스트
@@ -253,11 +315,13 @@ python test_telegram_rsi.py     # 텔레그램 RSI 알림 테스트
 ## 사용법
 
 ### 1. 한 번만 실행 (테스트용)
+
 ```bash
 python crypto_monitor.py once
 ```
 
 ### 2. 지속적 모니터링 (실제 운영)
+
 ```bash
 python crypto_monitor.py
 ```
@@ -277,6 +341,7 @@ python crypto_monitor.py
 ## 알림 예시
 
 ### 💰 가격 변동 알림
+
 ```
 🚨 알림: BTC_USDT
 
@@ -294,6 +359,7 @@ Bitcoin (BTC_USDT)
 ```
 
 ### 📈 RSI 기술적 분석 알림
+
 ```
 🚨 RSI 알림: ASP_USDT
 
