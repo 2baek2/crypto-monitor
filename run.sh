@@ -58,7 +58,7 @@ case "$1" in
         ;;
     "config")
         echo "⚙️ 설정 파일 업데이트 중..."
-        uv run python update_config.py
+        uv run python update_config_smart.py
         ;;
     "schedule")
         echo "⏰ 스마트 스케줄링 테스트..."
