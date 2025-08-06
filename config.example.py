@@ -9,13 +9,6 @@ TELEGRAM_CHAT_ID = "your_telegram_chat_id_here"
 # 모니터링 설정
 # 예시 조건들 - 필요에 따라 수정하세요
 MONITOR_CONDITIONS = {
-    "price_change_24h_percent": {
-        "min": -10,  # 24시간 가격 변동률이 -10% 이하일 때 알림
-        "max": 15    # 24시간 가격 변동률이 15% 이상일 때 알림
-    },
-    "volume_change_24h": {
-        "min": 1.5   # 24시간 거래량이 1.5배 이상 증가했을 때 알림
-    },
     "rsi_conditions": {
         "enabled": True,                    # RSI 모니터링 활성화
         "timeframes": ["5m", "15m"],        # 5분봉, 15분봉 차트
