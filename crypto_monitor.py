@@ -8,10 +8,12 @@ from datetime import datetime, timedelta
 import time
 from typing import Dict, List, Optional, Any
 import json
+import pytz
 
 from config import (
     GATE_API_KEY, GATE_API_SECRET, TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID,
-    MONITOR_CONDITIONS, CHECK_INTERVAL_MINUTES, MARKET_SETTINGS, ALERT_COOLDOWN
+    MONITOR_CONDITIONS, CHECK_INTERVAL_MINUTES, MARKET_SETTINGS, ALERT_COOLDOWN,
+    NOTIFICATION_SCHEDULE
 )
 from watchlist import WATCHLIST
 from technical_analysis import TechnicalAnalyzer
@@ -366,8 +368,66 @@ class CryptoMonitor:
             
         return alerts
 
+    def is_notification_allowed(self) -> bool:
+        """현재 시간에 알림이 허용되는지 확인합니다."""
+        try:
+            # NOTIFICATION_SCHEDULE 설정이 없거나 비활성화된 경우 항상 허용
+            if not hasattr(self, 'notification_schedule') or not NOTIFICATION_SCHEDULE.get('enabled', False):
+                return True
+            
+            # 한국시간으로 현재 시간 가져오기
+            timezone = pytz.timezone(NOTIFICATION_SCHEDULE.get('timezone', 'Asia/Seoul'))
+            now = datetime.now(timezone)
+            current_hour = now.hour
+            current_weekday = now.weekday()  # 0=월요일, 6=일요일
+            is_weekend = current_weekday >= 5  # 토요일(5), 일요일(6)
+            
+            # 주말 알림 비활성화 설정 확인
+            if is_weekend and NOTIFICATION_SCHEDULE.get('disable_weekends', False):
+                logger.info(f"주말 알림 비활성화: {now.strftime('%Y-%m-%d %H:%M:%S')}")
+                return False
+            
+            # 조용한 시간 설정
+            quiet_hours = NOTIFICATION_SCHEDULE.get('quiet_hours', {})
+            
+            # 주말 전용 조용한 시간 설정이 있고 활성화된 경우
+            if is_weekend:
+                weekend_quiet = NOTIFICATION_SCHEDULE.get('weekend_quiet_hours', {})
+                if weekend_quiet.get('enabled', False):
+                    quiet_hours = weekend_quiet
+            
+            # 시간 파싱 (HH:MM 형식에서 시간만 추출)
+            start_time_str = quiet_hours.get('start', '22:00')
+            end_time_str = quiet_hours.get('end', '08:00')
+            start_hour = int(start_time_str.split(':')[0])
+            end_hour = int(end_time_str.split(':')[0])
+            
+            # 시간 비교 (start_hour가 end_hour보다 큰 경우 다음날까지 처리)
+            if start_hour <= end_hour:
+                # 같은 날 내 시간대 (예: 08시 ~ 22시 허용)
+                is_quiet = start_hour <= current_hour <= end_hour
+                is_allowed = not is_quiet
+            else:
+                # 다음날로 넘어가는 시간대 (예: 22시 ~ 08시 조용)
+                is_quiet = current_hour >= start_hour or current_hour < end_hour
+                is_allowed = not is_quiet
+            
+            if not is_allowed:
+                logger.info(f"조용한 시간 알림 차단: {now.strftime('%Y-%m-%d %H:%M:%S')} (설정: {start_time_str} ~ {end_time_str})")
+            
+            return is_allowed
+            
+        except Exception as e:
+            logger.error(f"알림 시간 확인 오류: {e}")
+            return True  # 오류 시 기본적으로 허용
+
     async def send_telegram_message(self, message: str) -> bool:
         """텔레그램으로 메시지를 보냅니다."""
+        # 알림 시간 제한 확인
+        if not self.is_notification_allowed():
+            logger.info("조용한 시간으로 인해 알림이 차단되었습니다.")
+            return False
+            
         if not self.bot or not self.chat_id:
             logger.warning("텔레그램 설정이 없어 메시지를 보낼 수 없습니다.")
             return False

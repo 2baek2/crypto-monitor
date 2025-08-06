@@ -18,6 +18,7 @@ Requires-Dist: ta>=0.10.0
 Requires-Dist: aiohttp>=3.8.0
 Requires-Dist: python-dotenv>=0.19.0
 Requires-Dist: requests>=2.32.4
+Requires-Dist: pytz>=2021.1
 Provides-Extra: dev
 Requires-Dist: pytest>=6.0; extra == "dev"
 Requires-Dist: black>=21.0; extra == "dev"
