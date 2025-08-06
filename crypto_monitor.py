@@ -423,14 +423,14 @@ class CryptoMonitor:
 
     async def send_telegram_message(self, message: str) -> bool:
         """텔레그램으로 메시지를 보냅니다."""
-        # 알림 시간 제한 확인
-        if not self.is_notification_allowed():
-            logger.info("조용한 시간으로 인해 알림이 차단되었습니다.")
-            return False
-            
         if not self.bot or not self.chat_id:
             logger.warning("텔레그램 설정이 없어 메시지를 보낼 수 없습니다.")
             return False
+        
+        # 알림 시간 제한 확인 - silent 모드 결정
+        is_silent = not self.is_notification_allowed()
+        if is_silent:
+            logger.info("조용한 시간으로 인해 알림을 무음으로 발송합니다.")
             
         try:
             # HTML 특수문자 이스케이프 처리
@@ -444,7 +444,8 @@ class CryptoMonitor:
             await self.bot.send_message(
                 chat_id=self.chat_id,
                 text=safe_message,
-                parse_mode='HTML'
+                parse_mode='HTML',
+                disable_notification=is_silent  # 조용한 시간에는 알림음 없이
             )
             return True
         except TelegramError as e:
@@ -457,7 +458,8 @@ class CryptoMonitor:
                 
                 await self.bot.send_message(
                     chat_id=self.chat_id,
-                    text=plain_message
+                    text=plain_message,
+                    disable_notification=is_silent  # 조용한 시간에는 알림음 없이
                 )
                 return True
             except TelegramError as e2:

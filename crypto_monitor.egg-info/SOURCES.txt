@@ -2,6 +2,7 @@
 LICENSE
 README.md
 config.example.py
+config.py.backup
 crypto_monitor.py
 install.sh
 pyproject.toml
@@ -10,7 +11,10 @@ run.sh
 run_futures_monitor.py
 run_tests.py
 technical_analysis.py
+test_notification_schedule.py
+test_simple_monitor.py
 update_config.py
+update_config_smart.py
 watchlist.py
 crypto_monitor.egg-info/PKG-INFO
 crypto_monitor.egg-info/SOURCES.txt

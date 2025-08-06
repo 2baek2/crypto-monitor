@@ -38,8 +38,8 @@ NOTIFICATION_SCHEDULE = {
     "enabled": True,                        # 시간 제한 기능 활성화
     "timezone": "Asia/Seoul",               # 시간대 (한국시간)
     "quiet_hours": {
-        "start": "22:00",                   # 알림 중지 시작 시간 (22시)
-        "end": "08:00"                      # 알림 중지 종료 시간 (08시)
+        "start": "23:00",                   # 알림 중지 시작 시간 (23시)
+        "end": "09:00"                      # 알림 중지 종료 시간 (09시)
     },
     "disable_weekends": False,              # 주말 알림 비활성화 (True/False)
     "weekend_quiet_hours": {                # 주말 전용 조용한 시간 (선택사항)
