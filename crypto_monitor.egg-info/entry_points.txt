@@ -1,0 +1,2 @@
+[console_scripts]
+crypto-monitor = crypto_monitor:main

@@ -1,0 +1,4 @@
+crypto_monitor
+technical_analysis
+update_config
+watchlist
