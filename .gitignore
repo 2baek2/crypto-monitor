@@ -1,0 +1,41 @@
+# 로그 파일 - 모니터링 실행 중 생성됩니다
+crypto_monitor.log
+
+# Python 가상환경
+.venv/
+venv/
+env/
+
+# 바이트코드 파일
+__pycache__/
+*.py[cod]
+*$py.class
+
+# 실제 설정 파일 (API 키 포함)
+config.py
+
+# 설정 파일 백업
+config.py.bak
+.env
+.env.local
+
+# IDE 설정
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# macOS
+.DS_Store
+
+# Windows
+Thumbs.db
+ehthumbs.db
+
+# 임시 파일
+*.tmp
+*.temp
+
+# 개인 API 키 파일
+*_keys.py
+secrets.py
