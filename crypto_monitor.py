@@ -372,7 +372,7 @@ class CryptoMonitor:
         """현재 시간에 알림이 허용되는지 확인합니다."""
         try:
             # NOTIFICATION_SCHEDULE 설정이 없거나 비활성화된 경우 항상 허용
-            if not hasattr(self, 'notification_schedule') or not NOTIFICATION_SCHEDULE.get('enabled', False):
+            if not NOTIFICATION_SCHEDULE.get('enabled', False):
                 return True
             
             # 한국시간으로 현재 시간 가져오기
