@@ -107,12 +107,13 @@ def extract_simple_values(content: str) -> Dict[str, str]:
         'GATE_API_SECRET': r'GATE_API_SECRET\s*=\s*["\']([^"\']*)["\']',
         'TELEGRAM_BOT_TOKEN': r'TELEGRAM_BOT_TOKEN\s*=\s*["\']([^"\']*)["\']',
         'TELEGRAM_CHAT_ID': r'TELEGRAM_CHAT_ID\s*=\s*["\']([^"\']*)["\']',
+        'CHECK_INTERVAL_MINUTES': r'CHECK_INTERVAL_MINUTES\s*=\s*(\d+)',
     }
     
     for key, pattern in patterns.items():
         match = re.search(pattern, content)
         if match and not match.group(1).startswith('your_'):
-            values[key] = match.group(1)
+            values[key] = int(match.group(1)) if key == "CHECK_INTERVAL_MINUTES" else match.group(1)
     
     return values
 
@@ -241,11 +242,16 @@ def update_config():
     
     # 간단한 문자열 변수들 처리
     for key, value in old_simple_values.items():
-        pattern = rf'{key}\s*=\s*["\'][^"\']*["\']'
-        replacement = f'{key} = "{value}"'
+        if isinstance(value, int):
+            pattern = rf'{key}\s*=\s*\d+'
+            replacement = f'{key} = {value}'
+        else:
+            pattern = rf'{key}\s*=\s*["\'][^"\']*["\']'
+            replacement = f'{key} = "{value}"'
+        
         updated_content = re.sub(pattern, replacement, updated_content)
         print(f"✅ {key} 값이 보존되었습니다.")
-    
+
     # 새 파일 쓰기
     with open(config_path, 'w', encoding='utf-8') as f:
         f.write(updated_content)
