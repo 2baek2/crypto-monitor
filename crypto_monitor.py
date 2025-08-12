@@ -634,6 +634,8 @@ class CryptoMonitor:
 
     async def run_continuous_monitoring(self):
         """지속적인 모니터링을 스마트 스케줄링으로 실행합니다."""
+        await self.send_telegram_message("🚀 <b>모니터링 시스템 시작</b>\n새로운 투자 기회를 탐색합니다.")
+        
         smallest_tf_minutes = self.get_smallest_timeframe_minutes()
         
         logger.info(f"지속적 모니터링 시작")
