@@ -314,14 +314,20 @@ class CryptoMonitor:
                 div_config = conditions['divergence_conditions']
                 div_timeframes = div_config.get('timeframes', ['5m', '15m'])
                 rsi_period = div_config.get('rsi_period', 14)
+                left_bars = div_config.get('left_bars', 5)
+                right_bars = div_config.get('right_bars', 5)
                 lookback_range = tuple(div_config.get('lookback_range', [5, 60]))
                 include_hidden = div_config.get('include_hidden', False)
-                recent_bars_only = div_config.get('recent_bars_only', 5)
                 
                 for timeframe in div_timeframes:
                     try:
                         divergence_alerts = self.technical_analyzer.detect_rsi_divergence(
-                            symbol, timeframe, rsi_period, lookback_range, recent_bars_only
+                            symbol=symbol,
+                            timeframe=timeframe,
+                            rsi_period=rsi_period,
+                            left_bars=left_bars,
+                            right_bars=right_bars,
+                            lookback_range=lookback_range
                         )
                         
                         # Hidden 다이버전스 필터링

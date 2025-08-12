@@ -6,6 +6,7 @@ import logging
 from typing import Dict, List, Optional, Tuple
 import gate_api
 from gate_api.exceptions import ApiException, GateApiException
+import pytz
 
 logger = logging.getLogger(__name__)
 
@@ -79,7 +80,7 @@ class TechnicalAnalyzer:
                 })
             
             df = pd.DataFrame(data)
-            df['datetime'] = pd.to_datetime(df['timestamp'], unit='s')
+            df['datetime'] = pd.to_datetime(df['timestamp'], unit='s', utc=True)
             df = df.sort_values('timestamp').reset_index(drop=True)
             
             logger.debug(f"{symbol} {interval} 데이터 {len(df)}개 로드 완료")
@@ -238,142 +239,100 @@ class TechnicalAnalyzer:
             
         return summary
 
-    def find_pivots(self, data: pd.Series, left_bars: int = 5, right_bars: int = 5) -> Tuple[List[int], List[int]]:
-        """피벗 하이/로우를 찾습니다."""
+    def find_pivots(self, data: pd.Series, left_bars: int, right_bars: int) -> Tuple[List[int], List[int]]:
+        """
+        피벗 하이/로우를 찾습니다. (TradingView Pine Script의 ta.pivotlow/ta.pivothigh와 유사한 로직)
+        - 피벗 로우: 특정 지점의 값이 왼쪽(lbL)과 오른쪽(lbR)의 모든 값보다 '작은' 지점.
+        - 피벗 하이: 특정 지점의 값이 왼쪽(lbL)과 오른쪽(lbR)의 모든 값보다 '큰' 지점.
+        """
         pivot_lows = []
         pivot_highs = []
-        
+
+        if len(data) < left_bars + right_bars + 1:
+            return [], []
+
         for i in range(left_bars, len(data) - right_bars):
-            # 피벗 로우 찾기
-            is_pivot_low = True
-            for j in range(i - left_bars, i + right_bars + 1):
-                if j != i and data.iloc[j] <= data.iloc[i]:
-                    is_pivot_low = False
-                    break
-            if is_pivot_low:
-                pivot_lows.append(i)
+            pivot_val = data.iloc[i]
             
-            # 피벗 하이 찾기
-            is_pivot_high = True
-            for j in range(i - left_bars, i + right_bars + 1):
-                if j != i and data.iloc[j] >= data.iloc[i]:
-                    is_pivot_high = False
-                    break
-            if is_pivot_high:
+            # .iloc를 사용하여 슬라이싱
+            left_window = data.iloc[i - left_bars : i]
+            right_window = data.iloc[i + 1 : i + right_bars + 1]
+            
+            # 피벗 로우: pivot_val이 주변 모든 값보다 작아야 함
+            if (left_window > pivot_val).all() and (right_window > pivot_val).all():
+                pivot_lows.append(i)
+
+            # 피벗 하이: pivot_val이 주변 모든 값보다 커야 함
+            if (left_window < pivot_val).all() and (right_window < pivot_val).all():
                 pivot_highs.append(i)
-        
+                
         return pivot_lows, pivot_highs
 
     def detect_rsi_divergence(self, symbol: str, timeframe: str = "5m", 
-                             rsi_period: int = 14, lookback_range: Tuple[int, int] = (5, 60),
-                             recent_bars_only: int = 5) -> List[str]:
-        """RSI 다이버전스를 감지합니다. (최근 봉에서 발생한 것만)"""
+                             rsi_period: int = 14, left_bars: int = 5, right_bars: int = 5,
+                             lookback_range: Tuple[int, int] = (5, 60)) -> List[str]:
+        """RSI 다이버전스를 감지합니다. (TradingView Pine Script 로직 기반)"""
         divergence_signals = []
-        
         try:
-            # 충분한 데이터 가져오기
-            df = self.get_candlestick_data(symbol, timeframe, limit=200)
-            if df is None or len(df) < 100:
-                logger.warning(f"{symbol} 다이버전스 분석을 위한 데이터가 부족합니다.")
-                return divergence_signals
-            
-            # RSI 계산
-            rsi_indicator = RSIIndicator(df['close'], window=rsi_period)
-            df['rsi'] = rsi_indicator.rsi()
-            
-            # 피벗 포인트 찾기
-            rsi_pivot_lows, rsi_pivot_highs = self.find_pivots(df['rsi'])
-            price_pivot_lows, price_pivot_highs = self.find_pivots(df['low'])
-            price_high_pivots, _ = self.find_pivots(df['high'])
-            
+            kst = pytz.timezone('Asia/Seoul')
             min_range, max_range = lookback_range
             
-            # 최근 봉 범위 계산
-            recent_threshold = len(df) - recent_bars_only
-            
-            # Regular Bullish Divergence 검사 (가격: Lower Low, RSI: Higher Low)
-            # 최근 봉에서 발생한 피벗만 확인
-            recent_low_pivots = [idx for idx in rsi_pivot_lows if idx >= recent_threshold]
-            
-            for current_low_idx in recent_low_pivots:
-                for prev_low_idx in rsi_pivot_lows:
-                    if prev_low_idx >= current_low_idx:  # 이전 피벗이어야 함
-                        continue
-                        
-                    bars_between = current_low_idx - prev_low_idx
-                    if min_range <= bars_between <= max_range:
-                        # 가격이 Lower Low이고 RSI가 Higher Low인지 확인
-                        current_price = df['low'].iloc[current_low_idx]
-                        prev_price = df['low'].iloc[prev_low_idx]
-                        current_rsi = df['rsi'].iloc[current_low_idx]
-                        prev_rsi = df['rsi'].iloc[prev_low_idx]
-                        
-                        if (current_price < prev_price and  # 가격 Lower Low
-                            current_rsi > prev_rsi and      # RSI Higher Low
-                            not pd.isna(current_rsi) and not pd.isna(prev_rsi)):
-                            divergence_signals.append(f"🟢 Regular Bullish Divergence ({timeframe}): 가격 {current_price:.4f} ↓ {prev_price:.4f}, RSI {current_rsi:.2f} ↑ {prev_rsi:.2f}")
-                            break
-            
-            # Regular Bearish Divergence 검사 (가격: Higher High, RSI: Lower High)  
-            recent_high_pivots = [idx for idx in rsi_pivot_highs if idx >= recent_threshold]
-            
-            for current_high_idx in recent_high_pivots:
-                for prev_high_idx in rsi_pivot_highs:
-                    if prev_high_idx >= current_high_idx:
-                        continue
-                        
-                    bars_between = current_high_idx - prev_high_idx
-                    if min_range <= bars_between <= max_range:
-                        current_price = df['high'].iloc[current_high_idx]
-                        prev_price = df['high'].iloc[prev_high_idx]
-                        current_rsi = df['rsi'].iloc[current_high_idx]
-                        prev_rsi = df['rsi'].iloc[prev_high_idx]
-                        
-                        if (current_price > prev_price and  # 가격 Higher High
-                            current_rsi < prev_rsi and      # RSI Lower High
-                            not pd.isna(current_rsi) and not pd.isna(prev_rsi)):
-                            divergence_signals.append(f"🔴 Regular Bearish Divergence ({timeframe}): 가격 {current_price:.4f} ↑ {prev_price:.4f}, RSI {current_rsi:.2f} ↓ {prev_rsi:.2f}")
-                            break
-            
-            # Hidden Bullish Divergence 검사 (가격: Higher Low, RSI: Lower Low)
-            for current_low_idx in recent_low_pivots:
-                for prev_low_idx in rsi_pivot_lows:
-                    if prev_low_idx >= current_low_idx:
-                        continue
-                        
-                    bars_between = current_low_idx - prev_low_idx
-                    if min_range <= bars_between <= max_range:
-                        current_price = df['low'].iloc[current_low_idx]
-                        prev_price = df['low'].iloc[prev_low_idx]
-                        current_rsi = df['rsi'].iloc[current_low_idx]
-                        prev_rsi = df['rsi'].iloc[prev_low_idx]
-                        
-                        if (current_price > prev_price and  # 가격 Higher Low
-                            current_rsi < prev_rsi and      # RSI Lower Low
-                            not pd.isna(current_rsi) and not pd.isna(prev_rsi)):
-                            divergence_signals.append(f"🟡 Hidden Bullish Divergence ({timeframe}): 가격 {current_price:.4f} ↑ {prev_price:.4f}, RSI {current_rsi:.2f} ↓ {prev_rsi:.2f}")
-                            break
-            
-            # Hidden Bearish Divergence 검사 (가격: Lower High, RSI: Higher High)
-            for current_high_idx in recent_high_pivots:
-                for prev_high_idx in rsi_pivot_highs:
-                    if prev_high_idx >= current_high_idx:
-                        continue
-                        
-                    bars_between = current_high_idx - prev_high_idx
-                    if min_range <= bars_between <= max_range:
-                        current_price = df['high'].iloc[current_high_idx]
-                        prev_price = df['high'].iloc[prev_high_idx]
-                        current_rsi = df['rsi'].iloc[current_high_idx]
-                        prev_rsi = df['rsi'].iloc[prev_high_idx]
-                        
-                        if (current_price < prev_price and  # 가격 Lower High
-                            current_rsi > prev_rsi and      # RSI Higher High
-                            not pd.isna(current_rsi) and not pd.isna(prev_rsi)):
-                            divergence_signals.append(f"🟠 Hidden Bearish Divergence ({timeframe}): 가격 {current_price:.4f} ↓ {prev_price:.4f}, RSI {current_rsi:.2f} ↑ {prev_rsi:.2f}")
-                            break
-            
+            # 데이터 로드 (계산에 필요한 충분한 양)
+            df = self.get_candlestick_data(symbol, timeframe, limit=max_range + left_bars + right_bars + 100)
+            if df is None or len(df) < rsi_period + max_range:
+                logger.warning(f"{symbol} 데이터 부족으로 다이버전스 분석 중단")
+                return []
+
+            # RSI 계산 및 NaN 값 제거
+            df['rsi'] = RSIIndicator(df['close'], window=rsi_period).rsi()
+            df = df.dropna().reset_index(drop=True)
+            if len(df) < max_range + left_bars:
+                return []
+
+            # 피벗 포인트 찾기
+            rsi_pivot_lows, rsi_pivot_highs = self.find_pivots(df['rsi'], left_bars, right_bars)
+            price_pivot_lows, price_pivot_highs = self.find_pivots(df['low'], left_bars, right_bars)
+            price_high_pivots, _ = self.find_pivots(df['high'], left_bars, right_bars)
+
+
+            # --- 다이버전스 검사 (가장 최근에 형성된 2개의 피벗을 기준) ---
+            # Regular Bullish: Price Lower Low, RSI Higher Low
+            if len(rsi_pivot_lows) >= 2 and len(price_pivot_lows) >= 2:
+                p2_idx, p1_idx = rsi_pivot_lows[-1], rsi_pivot_lows[-2]
+                price_p2_idx, price_p1_idx = price_pivot_lows[-1], price_pivot_lows[-2]
+                if min_range <= (p2_idx - p1_idx) <= max_range:
+                    if df['low'].iloc[price_p2_idx] < df['low'].iloc[price_p1_idx] and df['rsi'].iloc[p2_idx] > df['rsi'].iloc[p1_idx]:
+                        timestamp = df['datetime'].iloc[p2_idx].astimezone(kst).strftime('%Y-%m-%d %H:%M')
+                        divergence_signals.append(f"🟢 Regular Bullish Divergence ({timeframe}) - {timestamp}")
+
+            # Hidden Bullish: Price Higher Low, RSI Lower Low
+            if len(rsi_pivot_lows) >= 2 and len(price_pivot_lows) >= 2:
+                p2_idx, p1_idx = rsi_pivot_lows[-1], rsi_pivot_lows[-2]
+                price_p2_idx, price_p1_idx = price_pivot_lows[-1], price_pivot_lows[-2]
+                if min_range <= (p2_idx - p1_idx) <= max_range:
+                    if df['low'].iloc[price_p2_idx] > df['low'].iloc[price_p1_idx] and df['rsi'].iloc[p2_idx] < df['rsi'].iloc[p1_idx]:
+                        timestamp = df['datetime'].iloc[p2_idx].astimezone(kst).strftime('%Y-%m-%d %H:%M')
+                        divergence_signals.append(f"🟡 Hidden Bullish Divergence ({timeframe}) - {timestamp}")
+
+            # Regular Bearish: Price Higher High, RSI Lower High
+            if len(rsi_pivot_highs) >= 2 and len(price_high_pivots) >= 2:
+                p2_idx, p1_idx = rsi_pivot_highs[-1], rsi_pivot_highs[-2]
+                price_p2_idx, price_p1_idx = price_high_pivots[-1], price_high_pivots[-2]
+                if min_range <= (p2_idx - p1_idx) <= max_range:
+                    if df['high'].iloc[price_p2_idx] > df['high'].iloc[price_p1_idx] and df['rsi'].iloc[p2_idx] < df['rsi'].iloc[p1_idx]:
+                        timestamp = df['datetime'].iloc[p2_idx].astimezone(kst).strftime('%Y-%m-%d %H:%M')
+                        divergence_signals.append(f"🔴 Regular Bearish Divergence ({timeframe}) - {timestamp}")
+
+            # Hidden Bearish: Price Lower High, RSI Higher High
+            if len(rsi_pivot_highs) >= 2 and len(price_high_pivots) >= 2:
+                p2_idx, p1_idx = rsi_pivot_highs[-1], rsi_pivot_highs[-2]
+                price_p2_idx, price_p1_idx = price_high_pivots[-1], price_high_pivots[-2]
+                if min_range <= (p2_idx - p1_idx) <= max_range:
+                    if df['high'].iloc[price_p2_idx] < df['high'].iloc[price_p1_idx] and df['rsi'].iloc[p2_idx] > df['rsi'].iloc[p1_idx]:
+                        timestamp = df['datetime'].iloc[p2_idx].astimezone(kst).strftime('%Y-%m-%d %H:%M')
+                        divergence_signals.append(f"🟠 Hidden Bearish Divergence ({timeframe}) - {timestamp}")
+
         except Exception as e:
-            logger.error(f"{symbol} RSI 다이버전스 분석 오류: {e}")
+            logger.error(f"{symbol} RSI 다이버전스 분석 오류: {e}", exc_info=True)
         
-        return divergence_signals
+        return list(set(divergence_signals)) # 중복된 신호 제거 후 반환

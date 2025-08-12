@@ -20,9 +20,10 @@ MONITOR_CONDITIONS = {
         "enabled": True,
         "timeframes": ["5m", "15m"],        # 다이버전스 분석 시간대
         "rsi_period": 14,                   # RSI 계산 기간
-        "lookback_range": [5, 60],          # 피벗 포인트 검색 범위
-        "include_hidden": False,            # Hidden 다이버전스 포함 여부
-        "recent_bars_only": 5               # 최근 N봉에서만 감지
+        "left_bars": 5,                     # 피벗 왼쪽 lookback
+        "right_bars": 5,                    # 피벗 오른쪽 lookback
+        "lookback_range": [5, 60],          # 피벗 포인트 간의 최소/최대 간격
+        "include_hidden": False             # Hidden 다이버전스 포함 여부
     }
 }
 
@@ -53,9 +54,9 @@ NOTIFICATION_SCHEDULE = {
 MARKET_SETTINGS = {
     "market_type": "futures",         # "spot" 또는 "futures"
     "settle": "usdt",                # futures 결제 통화 (usdt, btc)
-    "top_volume_limit": 50,          # 거래량 상위 몇 개 종목을 모니터링할지
-    "max_alerts_per_cycle": 5        # 한 번에 최대 몇 개의 알림을 보낼지
+    "top_volume_limit": 7,          # 거래량 상위 몇 개 종목을 모니터링할지
+    "max_alerts_per_cycle": 20        # 한 번에 최대 몇 개의 알림을 보낼지
 }
 
 # 체크 주기 (분)
-CHECK_INTERVAL_MINUTES = 30
+CHECK_INTERVAL_MINUTES = 15
