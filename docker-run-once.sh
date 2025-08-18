@@ -25,9 +25,9 @@ if [ ! -f "config.py" ]; then
 fi
 
 echo -e "${BLUE}🔨 Docker 이미지 빌드 중...${NC}"
-docker-compose build crypto-monitor
+docker compose build crypto-monitor
 
 echo -e "${BLUE}🚀 한 번만 실행 중...${NC}"
-docker-compose run --rm crypto-monitor python crypto_monitor.py once
+docker compose run --rm crypto-monitor python crypto_monitor.py once
 
 echo -e "${GREEN}✅ 실행 완료!${NC}"

@@ -105,19 +105,19 @@ nano config.py  # 또는 다른 에디터 사용
 
 ```bash
 # 컨테이너 빌드 및 실행
-docker-compose up -d
+docker compose up -d
 
 # 로그 확인
-docker-compose logs -f crypto-monitor
+docker compose logs -f crypto-monitor
 
 # 컨테이너 중지
-docker-compose down
+docker compose down
 
 # 컨테이너 재시작
-docker-compose restart
+docker compose restart
 
 # 한 번만 실행
-docker-compose run --rm crypto-monitor python crypto_monitor.py once
+docker compose run --rm crypto-monitor python crypto_monitor.py once
 ```
 
 ### 환경 변수 설정

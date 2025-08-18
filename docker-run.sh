@@ -38,32 +38,32 @@ mkdir -p logs
 
 # 4. Docker 이미지 빌드
 echo -e "${BLUE}🔨 Docker 이미지 빌드 중...${NC}"
-docker-compose build
+docker compose build
 
 # 5. 컨테이너 실행
 echo -e "${BLUE}🐳 컨테이너 시작 중...${NC}"
-docker-compose up -d
+docker compose up -d
 
 # 6. 상태 확인
 echo -e "${GREEN}✅ 설정 완료!${NC}"
 echo ""
 echo "📊 컨테이너 상태:"
-docker-compose ps
+docker compose ps
 
 echo ""
 echo "📝 로그 확인:"
-echo "  docker-compose logs -f crypto-monitor"
+echo "  docker compose logs -f crypto-monitor"
 echo ""
 echo "🛑 중지:"
-echo "  docker-compose down"
+echo "  docker compose down"
 echo ""
 echo "🔄 재시작:"
-echo "  docker-compose restart"
+echo "  docker compose restart"
 
 # 7. 실시간 로그 표시 여부 묻기
 read -p "실시간 로그를 보시겠습니까? (y/N): " -n 1 -r
 echo
 if [[ $REPLY =~ ^[Yy]$ ]]; then
     echo -e "${BLUE}📋 실시간 로그 (Ctrl+C로 종료):${NC}"
-    docker-compose logs -f crypto-monitor
+    docker compose logs -f crypto-monitor
 fi
