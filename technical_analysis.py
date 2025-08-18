@@ -4,8 +4,8 @@ from ta.momentum import RSIIndicator
 from datetime import datetime, timedelta
 import logging
 from typing import Dict, List, Optional, Tuple
-import gate_api
-from gate_api.exceptions import ApiException, GateApiException
+from binance.client import Client
+from binance.exceptions import BinanceAPIException, BinanceRequestException
 import pytz
 
 logger = logging.getLogger(__name__)
@@ -14,69 +14,53 @@ logger = logging.getLogger(__name__)
 class TechnicalAnalyzer:
     """기술적 분석을 수행하는 클래스"""
     
-    def __init__(self, spot_api, futures_api=None, market_type='spot'):
-        self.spot_api = spot_api
-        self.futures_api = futures_api
+    def __init__(self, client: Client, market_type='spot'):
+        self.client = client
         self.market_type = market_type
         
     def get_candlestick_data(self, symbol: str, interval: str, limit: int = 200) -> Optional[pd.DataFrame]:
         """캔들스틱 데이터를 가져와서 DataFrame으로 변환합니다."""
         try:
-            # Gate.io 간격 매핑
+            # Binance 간격 매핑
             interval_mapping = {
-                "1m": "1m",
-                "5m": "5m", 
-                "15m": "15m",
-                "1h": "1h",
-                "4h": "4h",
-                "1d": "1d"
+                "1m": Client.KLINE_INTERVAL_1MINUTE,
+                "5m": Client.KLINE_INTERVAL_5MINUTE, 
+                "15m": Client.KLINE_INTERVAL_15MINUTE,
+                "1h": Client.KLINE_INTERVAL_1HOUR,
+                "4h": Client.KLINE_INTERVAL_4HOUR,
+                "1d": Client.KLINE_INTERVAL_1DAY
             }
             
-            gate_interval = interval_mapping.get(interval, "5m")
+            binance_interval = interval_mapping.get(interval, Client.KLINE_INTERVAL_5MINUTE)
             
             # 시장 타입에 따라 다른 API 사용
-            if self.market_type == 'futures' and self.futures_api:
-                candlesticks = self._get_futures_candlesticks(symbol, gate_interval, limit)
+            if self.market_type == 'futures':
+                candlesticks = self.client.futures_klines(
+                    symbol=symbol,
+                    interval=binance_interval,
+                    limit=limit
+                )
             else:
-                candlesticks = self._get_spot_candlesticks(symbol, gate_interval, limit)
+                candlesticks = self.client.get_klines(
+                    symbol=symbol,
+                    interval=binance_interval,
+                    limit=limit
+                )
             
             if not candlesticks:
                 logger.warning(f"{symbol} {interval} 캔들스틱 데이터가 없습니다.")
                 return None
                 
-            # DataFrame으로 변환
+            # DataFrame으로 변환 (Binance 표준 형식)
             data = []
             for candle in candlesticks:
-                # futures와 spot의 데이터 구조가 다를 수 있음
-                if self.market_type == 'futures':
-                    # Futures candlestick은 객체일 수 있음
-                    if hasattr(candle, 't'):  # 객체 형태
-                        data.append({
-                            'timestamp': int(candle.t),
-                            'open': float(candle.o),
-                            'high': float(candle.h),
-                            'low': float(candle.l),
-                            'close': float(candle.c),
-                            'volume': float(candle.v) if hasattr(candle, 'v') else 0
-                        })
-                    else:  # 리스트 형태
-                        data.append({
-                            'timestamp': int(candle[0]),
-                            'open': float(candle[5]),
-                            'high': float(candle[3]),
-                            'low': float(candle[4]),
-                            'close': float(candle[2]),
-                            'volume': float(candle[1])
-                        })
-                else:
-                    # Spot은 기존 방식 사용
-                    data.append({
-                        'timestamp': int(candle[0]),
-                        'open': float(candle[5]),
-                    'high': float(candle[3]),
-                    'low': float(candle[4]),
-                    'close': float(candle[2]),
-                    'volume': float(candle[1])
+                data.append({
+                    'timestamp': int(candle[0]) // 1000,  # milliseconds to seconds
+                    'open': float(candle[1]),
+                    'high': float(candle[2]),
+                    'low': float(candle[3]),
+                    'close': float(candle[4]),
+                    'volume': float(candle[5])
                 })
             
             df = pd.DataFrame(data)
@@ -86,32 +70,12 @@ class TechnicalAnalyzer:
             logger.debug(f"{symbol} {interval} 데이터 {len(df)}개 로드 완료")
             return df
             
-        except (ApiException, GateApiException) as e:
+        except (BinanceAPIException, BinanceRequestException) as e:
             logger.error(f"{symbol} {interval} 캔들스틱 데이터 조회 오류: {e}")
             return None
         except Exception as e:
             logger.error(f"{symbol} {interval} 데이터 처리 오류: {e}")
             return None
-
-    def _get_spot_candlesticks(self, symbol: str, interval: str, limit: int):
-        """스팟 캔들스틱 데이터를 조회합니다."""
-        return self.spot_api.list_candlesticks(
-            currency_pair=symbol,
-            interval=interval,
-            limit=limit
-        )
-
-    def _get_futures_candlesticks(self, symbol: str, interval: str, limit: int):
-        """퓨처스 캔들스틱 데이터를 조회합니다."""
-        # 퓨처스 심볼을 contract로 변환 (예: BTC_USDT -> BTC_USDT)
-        # Gate.io futures는 settle 파라미터가 필요할 수 있음
-        settle = 'usdt'  # 기본 결제 통화
-        return self.futures_api.list_futures_candlesticks(
-            settle=settle,
-            contract=symbol,
-            interval=interval,
-            limit=limit
-        )
     
     def calculate_rsi(self, df: pd.DataFrame, periods: List[int]) -> Dict[str, float]:
         """여러 기간의 RSI를 계산합니다."""

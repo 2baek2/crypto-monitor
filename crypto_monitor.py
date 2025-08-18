@@ -1,5 +1,5 @@
-import gate_api
-from gate_api.exceptions import ApiException, GateApiException
+from binance.client import Client
+from binance.exceptions import BinanceAPIException, BinanceRequestException
 import asyncio
 import logging
 from telegram import Bot
@@ -9,9 +9,10 @@ import time
 from typing import Dict, List, Optional, Any
 import json
 import pytz
+import os
 
 from config import (
-    GATE_API_KEY, GATE_API_SECRET, TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID,
+    BINANCE_API_KEY, BINANCE_API_SECRET, TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID,
     MONITOR_CONDITIONS, CHECK_INTERVAL_MINUTES, MARKET_SETTINGS, ALERT_COOLDOWN,
     NOTIFICATION_SCHEDULE
 )
@@ -32,19 +33,18 @@ logger = logging.getLogger(__name__)
 
 class CryptoMonitor:
     def __init__(self):
-        # Gate.io API 설정
-        self.configuration = gate_api.Configuration(
-            host="https://api.gateio.ws/api/v4"
-        )
-        # 대부분의 공개 API는 인증 없이 사용 가능
-        if GATE_API_KEY and GATE_API_SECRET and GATE_API_KEY != "your_gate_api_key_here":
-            # API 키 설정이 되어 있는 경우에만 인증 설정
-            self.configuration.key = GATE_API_KEY
-            self.configuration.secret = GATE_API_SECRET
+        # 환경 변수에서 설정 로드 (Docker 지원)
+        api_key = os.getenv('BINANCE_API_KEY', BINANCE_API_KEY)
+        api_secret = os.getenv('BINANCE_API_SECRET', BINANCE_API_SECRET)
+        bot_token = os.getenv('TELEGRAM_BOT_TOKEN', TELEGRAM_BOT_TOKEN)
+        chat_id = os.getenv('TELEGRAM_CHAT_ID', TELEGRAM_CHAT_ID)
         
-        self.api_client = gate_api.ApiClient(self.configuration)
-        self.spot_api = gate_api.SpotApi(self.api_client)
-        self.futures_api = gate_api.FuturesApi(self.api_client)
+        # Binance API 클라이언트 설정
+        if api_key and api_secret and api_key != "your_binance_api_key_here":
+            self.client = Client(api_key, api_secret)
+        else:
+            # 공개 데이터만 사용하는 경우
+            self.client = Client()
         
         # 시장 설정
         self.market_settings = MARKET_SETTINGS
@@ -58,12 +58,11 @@ class CryptoMonitor:
         
         # 기술적 분석기 초기화
         self.technical_analyzer = TechnicalAnalyzer(
-            spot_api=self.spot_api,
-            futures_api=self.futures_api,
+            client=self.client,
             market_type=self.market_type
         )        # Telegram Bot 설정
-        self.bot = Bot(token=TELEGRAM_BOT_TOKEN) if TELEGRAM_BOT_TOKEN else None
-        self.chat_id = TELEGRAM_CHAT_ID
+        self.bot = Bot(token=bot_token) if bot_token else None
+        self.chat_id = chat_id
         
         # 이전 데이터 저장용
         self.previous_data = {}
@@ -156,69 +155,91 @@ class CryptoMonitor:
         if ALERT_COOLDOWN.get('enabled', False):
             self.alert_cache[cache_key] = datetime.now()
 
-    async def get_top_volume_pairs(self, limit: int = None) -> List[Dict]:
+    def get_top_volume_pairs(self, limit: int = None) -> List[Dict]:
         """거래 대금 상위 종목을 가져옵니다."""
         if limit is None:
             limit = self.top_volume_limit
+        
+        # limit이 0이면 빈 리스트 반환
+        if limit <= 0:
+            logger.info("top_volume_limit이 0이므로 거래량 상위 종목을 조회하지 않습니다.")
+            return []
+            
+        logger.info(f"거래 대금 상위 {limit}개 종목 조회 시작...")
+        logger.info(f"시장 타입: {self.market_type}")
             
         try:
             if self.market_type == 'futures':
-                return await self._get_top_futures_volume(limit)
+                result = self._get_top_futures_volume(limit)
             else:
-                return await self._get_top_spot_volume(limit)
+                result = self._get_top_spot_volume(limit)
+            
+            logger.info(f"거래 대금 상위 종목 조회 결과: {len(result)}개")
+            return result
                 
         except Exception as e:
             logger.error(f"거래 대금 상위 종목 조회 오류: {e}")
+            import traceback
+            traceback.print_exc()
             return []
 
-    async def _get_top_spot_volume(self, limit: int) -> List[Dict]:
+    def _get_top_spot_volume(self, limit: int) -> List[Dict]:
         """스팟 시장의 거래 대금 상위 종목을 가져옵니다."""
         try:
-            # 모든 스팟 티커 정보 가져오기
-            tickers = self.spot_api.list_tickers()
+            logger.info("Binance 스팟 티커 데이터 조회 시작...")
+            # 24시간 티커 통계 정보 가져오기
+            tickers = self.client.get_ticker()
+            logger.info(f"총 {len(tickers)}개 티커 데이터 조회 완료")
             
             # USDT 페어만 필터링하고 거래 대금으로 정렬
             usdt_tickers = [
                 ticker for ticker in tickers 
-                if ticker.currency_pair.endswith('_USDT') and float(ticker.quote_volume) > 0
+                if ticker['symbol'].endswith('USDT') and float(ticker['quoteVolume']) > 0
             ]
+            logger.info(f"USDT 페어 {len(usdt_tickers)}개 필터링 완료")
             
             # 24시간 거래 대금 기준으로 정렬 (USDT)
             sorted_tickers = sorted(
                 usdt_tickers, 
-                key=lambda x: float(x.quote_volume), 
+                key=lambda x: float(x['quoteVolume']), 
                 reverse=True
             )
             
+            logger.info(f"상위 {limit}개 종목 반환")
             return sorted_tickers[:limit]
             
-        except (ApiException, GateApiException) as e:
-            logger.error(f"Gate.io Spot API 오류: {e}")
+        except (BinanceAPIException, BinanceRequestException) as e:
+            logger.error(f"Binance Spot API 오류: {e}")
+            return []
+        except Exception as e:
+            logger.error(f"예상치 못한 오류: {e}")
+            import traceback
+            traceback.print_exc()
             return []
 
-    async def _get_top_futures_volume(self, limit: int) -> List[Dict]:
+    def _get_top_futures_volume(self, limit: int) -> List[Dict]:
         """퓨처스 시장의 거래 대금 상위 종목을 가져옵니다."""
         try:
-            # 퓨처스 티커 정보 가져오기
-            tickers = self.futures_api.list_futures_tickers(settle=self.settle)
+            # 퓨처스 24시간 티커 통계 정보 가져오기
+            tickers = self.client.futures_ticker()
             
-            # 거래 대금이 있는 계약만 필터링
+            # 거래 대금이 있는 계약만 필터링 (USDT 마진)
             active_tickers = [
                 ticker for ticker in tickers 
-                if float(getattr(ticker, 'volume_24h_settle', 0)) > 0
+                if float(ticker['quoteVolume']) > 0
             ]
             
             # 24시간 거래 대금 기준으로 정렬 (USDT 기준)
             sorted_tickers = sorted(
                 active_tickers,
-                key=lambda x: float(x.volume_24h_settle),
+                key=lambda x: float(x['quoteVolume']),
                 reverse=True
             )
             
             return sorted_tickers[:limit]
             
-        except (ApiException, GateApiException) as e:
-            logger.error(f"Gate.io Futures API 오류: {e}")
+        except (BinanceAPIException, BinanceRequestException) as e:
+            logger.error(f"Binance Futures API 오류: {e}")
             return []
 
     def check_conditions(self, ticker: Any, symbol: str) -> List[str]:
@@ -226,24 +247,14 @@ class CryptoMonitor:
         alerts = []
         
         try:
-            # 현재 가격 정보 (시장 타입에 따라 다른 속성 사용)
-            current_price = float(ticker.last)
-            price_change_24h = float(ticker.change_percentage)
-            high_24h = float(ticker.high_24h)
-            low_24h = float(ticker.low_24h)
+            # Binance API 데이터 구조에 맞게 수정
+            current_price = float(ticker['lastPrice'])
+            price_change_24h = float(ticker['priceChangePercent'])
+            high_24h = float(ticker['highPrice'])
+            low_24h = float(ticker['lowPrice'])
             
-            # 거래량 정보 - 시장 타입에 따라 다른 속성 사용
-            if self.market_type == 'futures':
-                # Futures는 volume_24h_settle 또는 volume_24h 사용
-                if hasattr(ticker, 'volume_24h_settle'):
-                    volume_24h = float(ticker.volume_24h_settle)
-                elif hasattr(ticker, 'volume_24h'):
-                    volume_24h = float(ticker.volume_24h)
-                else:
-                    volume_24h = 0
-            else:
-                # Spot은 quote_volume 사용
-                volume_24h = float(getattr(ticker, 'quote_volume', 0))
+            # 거래량 정보 - Binance는 quoteVolume 사용
+            volume_24h = float(ticker['quoteVolume'])
             
             # 이전 데이터와 비교
             if symbol in self.previous_data:
@@ -480,22 +491,22 @@ class CryptoMonitor:
             else:
                 return self._format_spot_ticker(ticker)
         except Exception as e:
-            symbol = getattr(ticker, 'contract', getattr(ticker, 'currency_pair', 'Unknown'))
+            symbol = ticker.get('symbol', 'Unknown')
             logger.error(f"티커 정보 포맷팅 오류: {e}")
             return f"정보 표시 오류: {symbol}"
 
     def _format_spot_ticker(self, ticker: Any) -> str:
         """스팟 티커 정보를 포맷팅합니다."""
-        symbol = ticker.currency_pair
-        price = float(ticker.last)
-        change_24h = float(ticker.change_percentage)
-        volume_24h = float(ticker.quote_volume)
-        high_24h = float(ticker.high_24h)
-        low_24h = float(ticker.low_24h)
+        symbol = ticker['symbol']
+        price = float(ticker['lastPrice'])
+        change_24h = float(ticker['priceChangePercent'])
+        volume_24h = float(ticker['quoteVolume'])
+        high_24h = float(ticker['highPrice'])
+        low_24h = float(ticker['lowPrice'])
         
         # 종목명 가져오기
         coin_info = WATCHLIST.get(symbol, {})
-        coin_name = coin_info.get('name', symbol.replace('_USDT', ''))
+        coin_name = coin_info.get('name', symbol.replace('USDT', ''))
         
         info = f"""
 <b>{coin_name} ({symbol})</b>
@@ -509,15 +520,15 @@ class CryptoMonitor:
 
     def _format_futures_ticker(self, ticker: Any) -> str:
         """퓨처스 티커 정보를 포맷팅합니다."""
-        symbol = getattr(ticker, 'contract', getattr(ticker, 'currency_pair', 'Unknown'))
-        price = float(ticker.last)
-        change_24h = float(ticker.change_percentage)
-        volume_24h = float(getattr(ticker, 'volume_24h_usdt', getattr(ticker, 'volume_24h', 0)))
-        high_24h = float(ticker.high_24h)
-        low_24h = float(ticker.low_24h)
+        symbol = ticker['symbol']
+        price = float(ticker['lastPrice'])
+        change_24h = float(ticker['priceChangePercent'])
+        volume_24h = float(ticker['quoteVolume'])
+        high_24h = float(ticker['highPrice'])
+        low_24h = float(ticker['lowPrice'])
         
         # 퓨처스 계약명에서 기본 코인명 추출
-        base_symbol = symbol.split('_')[0] if '_' in symbol else symbol
+        base_symbol = symbol.replace('USDT', '') if symbol.endswith('USDT') else symbol
         coin_name = base_symbol
         
         info = f"""
@@ -536,7 +547,7 @@ class CryptoMonitor:
         
         try:
             # 1. 거래 대금 상위 종목 가져오기
-            top_volume_pairs = await self.get_top_volume_pairs(self.top_volume_limit)
+            top_volume_pairs = self.get_top_volume_pairs(self.top_volume_limit)
             
             if not top_volume_pairs:
                 logger.warning("거래 대금 상위 종목을 가져올 수 없습니다.")
@@ -551,10 +562,7 @@ class CryptoMonitor:
             
             # 거래 대금 상위 종목 추가
             for ticker in top_volume_pairs:
-                if self.market_type == 'futures':
-                    all_symbols_to_check.add(getattr(ticker, 'contract', getattr(ticker, 'currency_pair', 'Unknown')))
-                else:
-                    all_symbols_to_check.add(ticker.currency_pair)
+                all_symbols_to_check.add(ticker['symbol'])
             
             logger.info(f"모니터링 대상 종목 수: {len(all_symbols_to_check)}")
             
@@ -565,8 +573,7 @@ class CryptoMonitor:
                 # 해당 심볼의 티커 정보 찾기
                 ticker = None
                 for t in top_volume_pairs:
-                    ticker_symbol = t.contract if self.market_type == 'futures' else t.currency_pair
-                    if ticker_symbol == symbol:
+                    if t['symbol'] == symbol:
                         ticker = t
                         break
                 
@@ -574,11 +581,15 @@ class CryptoMonitor:
                 if not ticker and symbol in WATCHLIST:
                     try:
                         if self.market_type == 'futures':
-                            # Futures의 경우 개별 조회 방법이 다를 수 있음
-                            # 현재는 상위 거래량에서만 처리
-                            continue
+                            # Futures 개별 조회
+                            individual_ticker = self.client.futures_ticker(symbol=symbol)
+                            if individual_ticker:
+                                ticker = individual_ticker
                         else:
-                            ticker = self.spot_api.list_tickers(currency_pair=symbol)[0]
+                            # Spot 개별 조회
+                            individual_ticker = self.client.get_ticker(symbol=symbol)
+                            if individual_ticker:
+                                ticker = individual_ticker
                     except Exception as e:
                         logger.warning(f"{symbol} 티커 정보를 가져올 수 없습니다: {e}")
                         continue
@@ -611,15 +622,10 @@ class CryptoMonitor:
                 market_name = "Futures" if self.market_type == 'futures' else "Spot"
                 top_5_message = f"📊 <b>오늘의 {market_name} 거래 대금 상위 5개 종목</b>\n\n"
                 for i, ticker in enumerate(top_volume_pairs[:5], 1):
-                    if self.market_type == 'futures':
-                        symbol = getattr(ticker, 'contract', getattr(ticker, 'currency_pair', 'Unknown'))
-                        volume_24h = float(getattr(ticker, 'volume_24h_settle', ticker.volume_24h))
-                    else:
-                        symbol = ticker.currency_pair
-                        volume_24h = float(ticker.quote_volume)
-                        
-                    price = float(ticker.last)
-                    change_24h = float(ticker.change_percentage)
+                    symbol = ticker['symbol']
+                    volume_24h = float(ticker['quoteVolume'])
+                    price = float(ticker['lastPrice'])
+                    change_24h = float(ticker['priceChangePercent'])
                     
                     top_5_message += f"{i}. <b>{symbol}</b>\n"
                     top_5_message += f"   💰 ${price:,.4f} ({change_24h:+.2f}%)\n"
@@ -634,8 +640,6 @@ class CryptoMonitor:
 
     async def run_continuous_monitoring(self):
         """지속적인 모니터링을 스마트 스케줄링으로 실행합니다."""
-        await self.send_telegram_message("🚀 <b>모니터링 시스템 시작</b>\n새로운 투자 기회를 탐색합니다.")
-        
         smallest_tf_minutes = self.get_smallest_timeframe_minutes()
         
         logger.info(f"지속적 모니터링 시작")
@@ -698,9 +702,15 @@ if __name__ == "__main__":
     
     monitor = CryptoMonitor()
     
+    # 환경 변수에서 모드 확인 (Docker 지원)
+    monitor_mode = os.getenv('MONITOR_MODE', '').lower()
+    
     if len(sys.argv) > 1 and sys.argv[1] == "once":
         # 한 번만 실행
         monitor.run_once()
+    elif monitor_mode == "once":
+        # 환경 변수로 한 번만 실행 지정
+        monitor.run_once()
     else:
-        # 지속적 실행
+        # 지속적 실행 (기본값)
         monitor.run_continuous()

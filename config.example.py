@@ -1,6 +1,6 @@
-# Gate.io API 설정 (공개 데이터만 사용하는 경우 비워두어도 됩니다)
-GATE_API_KEY = "your_gate_api_key_here"
-GATE_API_SECRET = "your_gate_api_secret_here"
+# Binance API 설정 (공개 데이터만 사용하는 경우 비워두어도 됩니다)
+BINANCE_API_KEY = "your_binance_api_key_here"
+BINANCE_API_SECRET = "your_binance_api_secret_here"
 
 # Telegram Bot 설정
 TELEGRAM_BOT_TOKEN = "your_telegram_bot_token_here"

@@ -1,32 +1,29 @@
 # 모니터링할 종목 리스트
 # 형식: "symbol": {"name": "종목명", "description": "설명"}
+# Binance 심볼 형식 사용 (예: BTCUSDT)
 
 WATCHLIST = {
-    "BTC_USDT": {
+    "BTCUSDT": {
         "name": "Bitcoin",
         "description": "비트코인"
     },
-    "ETH_USDT": {
+    "ETHUSDT": {
         "name": "Ethereum", 
         "description": "이더리움"
     },
-    "XRP_USDT": {
+    "XRPUSDT": {
         "name": "XRP",
         "description": "리플"
     },
-    "DOGE_USDT": {
+    "DOGEUSDT": {
         "name": "Dogecoin",
         "description": "도지코인"
     },
-    "FARTCOIN_USDT": {
-        "name": "Fartcoin",
-        "description": "방귀코인"
-    },
-    "ADA_USDT": {
+    "ADAUSDT": {
         "name": "Cardano",
         "description": "에이다"
     },
-    "SOL_USDT": {
+    "SOLUSDT": {
         "name": "Solana",
         "description": "솔라나"
     },

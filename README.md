@@ -3,7 +3,7 @@
 [![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-Gate.io API를 활용하여 암호화폐 시장을 모니터링하고, RSI 기술적 분석과 설정된 조건에 맞는 종목이 발견되면 텔레그램으로 알림을 보내는 시스템입니다.
+Binance API를 활용하여 암호화폐 시장을 모니터링하고, RSI 기술적 분석과 설정된 조건에 맞는 종목이 발견되면 텔레그램으로 알림을 보내는 시스템입니다.
 
 ## ✨ 주요 기능
 
@@ -89,6 +89,49 @@ install.sh가 기존 설정을 자동으로 보존하지만, 처음 설치시에
 nano config.py  # 또는 다른 에디터 사용
 ```
 
+## 🐳 Docker 사용법
+
+### 빠른 시작
+
+```bash
+# 1. Docker 설정 및 실행
+./docker-run.sh
+
+# 2. 한 번만 테스트 실행
+./docker-run-once.sh
+```
+
+### 상세 Docker 명령어
+
+```bash
+# 컨테이너 빌드 및 실행
+docker-compose up -d
+
+# 로그 확인
+docker-compose logs -f crypto-monitor
+
+# 컨테이너 중지
+docker-compose down
+
+# 컨테이너 재시작
+docker-compose restart
+
+# 한 번만 실행
+docker-compose run --rm crypto-monitor python crypto_monitor.py once
+```
+
+### 환경 변수 설정
+
+`.env` 파일을 생성하여 설정:
+
+```bash
+# .env.example을 복사하여 시작
+cp .env.example .env
+
+# 실제 값으로 편집
+nano .env
+```
+
 ## ⚙️ 설정
 
 ### 📱 Telegram Bot 설정 (필수)
@@ -111,9 +154,9 @@ nano config.py  # 또는 다른 에디터 사용
 TELEGRAM_BOT_TOKEN = "your_bot_token_here"
 TELEGRAM_CHAT_ID = "your_chat_id_here"
 
-# Gate.io API 설정 (선택사항 - 공개 데이터만 사용)
-GATE_API_KEY = "your_api_key_here"      # 비워둬도 됨
-GATE_API_SECRET = "your_api_secret_here"  # 비워둬도 됨
+# Binance API 설정 (선택사항 - 공개 데이터만 사용)
+BINANCE_API_KEY = "your_binance_api_key_here"        # 비워둬도 됨
+BINANCE_API_SECRET = "your_binance_api_secret_here"  # 비워둬도 됨
 
 # 시장 설정
 MARKET_SETTINGS = {
