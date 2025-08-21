@@ -241,6 +241,12 @@ class TechnicalAnalyzer:
             kst = pytz.timezone('Asia/Seoul')
             min_range, max_range = lookback_range
             
+            # 현재 시간 기준 1시간 이내 필터링을 위한 변수
+            current_time = datetime.now(kst)
+            one_hour_ago = current_time - timedelta(hours=1)
+            logger.debug(f"{symbol} 다이버전스 검사: 현재시간 {current_time.strftime('%Y-%m-%d %H:%M')}, "
+                        f"1시간 전 {one_hour_ago.strftime('%Y-%m-%d %H:%M')}")
+            
             # 데이터 로드 (계산에 필요한 충분한 양)
             df = self.get_candlestick_data(symbol, timeframe, limit=max_range + left_bars + right_bars + 100)
             if df is None or len(df) < rsi_period + max_range:
@@ -264,39 +270,73 @@ class TechnicalAnalyzer:
             if len(rsi_pivot_lows) >= 2 and len(price_pivot_lows) >= 2:
                 p2_idx, p1_idx = rsi_pivot_lows[-1], rsi_pivot_lows[-2]
                 price_p2_idx, price_p1_idx = price_pivot_lows[-1], price_pivot_lows[-2]
-                if min_range <= (p2_idx - p1_idx) <= max_range:
+                
+                # 최신 피벗이 1시간 이내에 형성되었는지 확인
+                signal_time = df['datetime'].iloc[p2_idx].astimezone(kst)
+                if signal_time >= one_hour_ago and min_range <= (p2_idx - p1_idx) <= max_range:
                     if df['low'].iloc[price_p2_idx] < df['low'].iloc[price_p1_idx] and df['rsi'].iloc[p2_idx] > df['rsi'].iloc[p1_idx]:
-                        timestamp = df['datetime'].iloc[p2_idx].astimezone(kst).strftime('%Y-%m-%d %H:%M')
+                        timestamp = signal_time.strftime('%Y-%m-%d %H:%M')
                         divergence_signals.append(f"🟢 Regular Bullish Divergence ({timeframe}) - {timestamp}")
+                        logger.info(f"{symbol} Regular Bullish Divergence 감지: {timestamp} (최근 1시간 이내)")
+                elif signal_time < one_hour_ago:
+                    logger.debug(f"{symbol} Regular Bullish Divergence 발견되었으나 시간 초과: "
+                               f"{signal_time.strftime('%Y-%m-%d %H:%M')} (1시간 이전)")
 
             # Hidden Bullish: Price Higher Low, RSI Lower Low
             if len(rsi_pivot_lows) >= 2 and len(price_pivot_lows) >= 2:
                 p2_idx, p1_idx = rsi_pivot_lows[-1], rsi_pivot_lows[-2]
                 price_p2_idx, price_p1_idx = price_pivot_lows[-1], price_pivot_lows[-2]
-                if min_range <= (p2_idx - p1_idx) <= max_range:
+                
+                # 최신 피벗이 1시간 이내에 형성되었는지 확인
+                signal_time = df['datetime'].iloc[p2_idx].astimezone(kst)
+                if signal_time >= one_hour_ago and min_range <= (p2_idx - p1_idx) <= max_range:
                     if df['low'].iloc[price_p2_idx] > df['low'].iloc[price_p1_idx] and df['rsi'].iloc[p2_idx] < df['rsi'].iloc[p1_idx]:
-                        timestamp = df['datetime'].iloc[p2_idx].astimezone(kst).strftime('%Y-%m-%d %H:%M')
+                        timestamp = signal_time.strftime('%Y-%m-%d %H:%M')
                         divergence_signals.append(f"🟡 Hidden Bullish Divergence ({timeframe}) - {timestamp}")
+                        logger.info(f"{symbol} Hidden Bullish Divergence 감지: {timestamp} (최근 1시간 이내)")
+                elif signal_time < one_hour_ago:
+                    logger.debug(f"{symbol} Hidden Bullish Divergence 발견되었으나 시간 초과: "
+                               f"{signal_time.strftime('%Y-%m-%d %H:%M')} (1시간 이전)")
 
             # Regular Bearish: Price Higher High, RSI Lower High
             if len(rsi_pivot_highs) >= 2 and len(price_high_pivots) >= 2:
                 p2_idx, p1_idx = rsi_pivot_highs[-1], rsi_pivot_highs[-2]
                 price_p2_idx, price_p1_idx = price_high_pivots[-1], price_high_pivots[-2]
-                if min_range <= (p2_idx - p1_idx) <= max_range:
+                
+                # 최신 피벗이 1시간 이내에 형성되었는지 확인
+                signal_time = df['datetime'].iloc[p2_idx].astimezone(kst)
+                if signal_time >= one_hour_ago and min_range <= (p2_idx - p1_idx) <= max_range:
                     if df['high'].iloc[price_p2_idx] > df['high'].iloc[price_p1_idx] and df['rsi'].iloc[p2_idx] < df['rsi'].iloc[p1_idx]:
-                        timestamp = df['datetime'].iloc[p2_idx].astimezone(kst).strftime('%Y-%m-%d %H:%M')
+                        timestamp = signal_time.strftime('%Y-%m-%d %H:%M')
                         divergence_signals.append(f"🔴 Regular Bearish Divergence ({timeframe}) - {timestamp}")
+                        logger.info(f"{symbol} Regular Bearish Divergence 감지: {timestamp} (최근 1시간 이내)")
+                elif signal_time < one_hour_ago:
+                    logger.debug(f"{symbol} Regular Bearish Divergence 발견되었으나 시간 초과: "
+                               f"{signal_time.strftime('%Y-%m-%d %H:%M')} (1시간 이전)")
 
             # Hidden Bearish: Price Lower High, RSI Higher High
             if len(rsi_pivot_highs) >= 2 and len(price_high_pivots) >= 2:
                 p2_idx, p1_idx = rsi_pivot_highs[-1], rsi_pivot_highs[-2]
                 price_p2_idx, price_p1_idx = price_high_pivots[-1], price_high_pivots[-2]
-                if min_range <= (p2_idx - p1_idx) <= max_range:
+                
+                # 최신 피벗이 1시간 이내에 형성되었는지 확인
+                signal_time = df['datetime'].iloc[p2_idx].astimezone(kst)
+                if signal_time >= one_hour_ago and min_range <= (p2_idx - p1_idx) <= max_range:
                     if df['high'].iloc[price_p2_idx] < df['high'].iloc[price_p1_idx] and df['rsi'].iloc[p2_idx] > df['rsi'].iloc[p1_idx]:
-                        timestamp = df['datetime'].iloc[p2_idx].astimezone(kst).strftime('%Y-%m-%d %H:%M')
+                        timestamp = signal_time.strftime('%Y-%m-%d %H:%M')
                         divergence_signals.append(f"🟠 Hidden Bearish Divergence ({timeframe}) - {timestamp}")
+                        logger.info(f"{symbol} Hidden Bearish Divergence 감지: {timestamp} (최근 1시간 이내)")
+                elif signal_time < one_hour_ago:
+                    logger.debug(f"{symbol} Hidden Bearish Divergence 발견되었으나 시간 초과: "
+                               f"{signal_time.strftime('%Y-%m-%d %H:%M')} (1시간 이전)")
 
         except Exception as e:
             logger.error(f"{symbol} RSI 다이버전스 분석 오류: {e}", exc_info=True)
+        
+        # 최종 결과 로깅
+        if divergence_signals:
+            logger.info(f"{symbol} 다이버전스 신호 {len(divergence_signals)}개 발견 (최근 1시간 이내)")
+        else:
+            logger.debug(f"{symbol} 최근 1시간 이내 다이버전스 신호 없음")
         
         return list(set(divergence_signals)) # 중복된 신호 제거 후 반환

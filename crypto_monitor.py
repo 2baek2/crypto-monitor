@@ -9,7 +9,6 @@ import time
 from typing import Dict, List, Optional, Any
 import json
 import pytz
-import os
 
 from config import (
     BINANCE_API_KEY, BINANCE_API_SECRET, TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID,
@@ -33,15 +32,9 @@ logger = logging.getLogger(__name__)
 
 class CryptoMonitor:
     def __init__(self):
-        # 환경 변수에서 설정 로드 (Docker 지원)
-        api_key = os.getenv('BINANCE_API_KEY', BINANCE_API_KEY)
-        api_secret = os.getenv('BINANCE_API_SECRET', BINANCE_API_SECRET)
-        bot_token = os.getenv('TELEGRAM_BOT_TOKEN', TELEGRAM_BOT_TOKEN)
-        chat_id = os.getenv('TELEGRAM_CHAT_ID', TELEGRAM_CHAT_ID)
-        
         # Binance API 클라이언트 설정
-        if api_key and api_secret and api_key != "your_binance_api_key_here":
-            self.client = Client(api_key, api_secret)
+        if BINANCE_API_KEY and BINANCE_API_SECRET and BINANCE_API_KEY != "your_binance_api_key_here":
+            self.client = Client(BINANCE_API_KEY, BINANCE_API_SECRET)
         else:
             # 공개 데이터만 사용하는 경우
             self.client = Client()
@@ -61,8 +54,8 @@ class CryptoMonitor:
             client=self.client,
             market_type=self.market_type
         )        # Telegram Bot 설정
-        self.bot = Bot(token=bot_token) if bot_token else None
-        self.chat_id = chat_id
+        self.bot = Bot(token=TELEGRAM_BOT_TOKEN) if TELEGRAM_BOT_TOKEN else None
+        self.chat_id = TELEGRAM_CHAT_ID
         
         # 이전 데이터 저장용
         self.previous_data = {}
@@ -702,15 +695,9 @@ if __name__ == "__main__":
     
     monitor = CryptoMonitor()
     
-    # 환경 변수에서 모드 확인 (Docker 지원)
-    monitor_mode = os.getenv('MONITOR_MODE', '').lower()
-    
     if len(sys.argv) > 1 and sys.argv[1] == "once":
         # 한 번만 실행
         monitor.run_once()
-    elif monitor_mode == "once":
-        # 환경 변수로 한 번만 실행 지정
-        monitor.run_once()
     else:
-        # 지속적 실행 (기본값)
+        # 지속적 실행
         monitor.run_continuous()

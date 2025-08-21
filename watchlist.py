@@ -27,6 +27,14 @@ WATCHLIST = {
         "name": "Solana",
         "description": "솔라나"
     },
+    "FARTCOINUSDT": {
+        "name": "FartCoin",
+        "description": "방귀코인"
+    },
+    "LINKUSDT": {
+        "name": "ChainLink",
+        "description": "체인링크"
+    }
 }
 
 # 추가 종목을 모니터링하려면 위 형식으로 추가하세요
