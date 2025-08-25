@@ -95,21 +95,22 @@ class CryptoMonitor:
         return min_minutes
     
     def get_next_candle_close_time(self, timeframe_minutes: int) -> datetime:
-        """다음 봉 마감 시간을 계산합니다."""
+        """다음 봉 마감 시간을 초 단위까지 정밀하게 계산합니다."""
         now = datetime.now()
-        
+
         # 현재 시간을 timeframe 단위로 올림
         minutes_since_midnight = now.hour * 60 + now.minute
         current_candle_start = (minutes_since_midnight // timeframe_minutes) * timeframe_minutes
         next_candle_start = current_candle_start + timeframe_minutes
-        
+
         # 다음 봉 시작 시간 (= 현재 봉 마감 시간)
         next_candle_time = now.replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(minutes=next_candle_start)
-        
-        # 만약 계산된 시간이 과거라면 다음 날로 이동
+
+        # 초 단위 보정
         if next_candle_time <= now:
-            next_candle_time += timedelta(days=1)
-        
+            next_candle_time += timedelta(minutes=timeframe_minutes)
+
+        logger.debug(f"다음 봉 마감 시간 계산: 현재 시간 {now}, 다음 마감 시간 {next_candle_time}")
         return next_candle_time
 
     def generate_alert_cache_key(self, symbol: str, condition_type: str, additional_info: str = "") -> str:
@@ -541,18 +542,18 @@ class CryptoMonitor:
         try:
             # 1. 거래 대금 상위 종목 가져오기
             top_volume_pairs = self.get_top_volume_pairs(self.top_volume_limit)
-            
-            if not top_volume_pairs:
-                logger.warning("거래 대금 상위 종목을 가져올 수 없습니다.")
+
+            if self.top_volume_limit == 0:
+                logger.info("top_volume_limit이 0으로 설정되어, 관심 종목만 모니터링합니다.")
+                top_volume_pairs = []
+
+            if not top_volume_pairs and not WATCHLIST:
+                logger.warning("거래 대금 상위 종목과 관심 종목이 모두 비어 있습니다. 모니터링을 중단합니다.")
                 return
-            
+
             # 2. 관심 종목과 거래 대금 상위 종목을 합쳐서 모니터링
-            all_symbols_to_check = set()
-            
-            # 관심 종목 추가
-            for symbol in WATCHLIST.keys():
-                all_symbols_to_check.add(symbol)
-            
+            all_symbols_to_check = set(WATCHLIST.keys())
+
             # 거래 대금 상위 종목 추가
             for ticker in top_volume_pairs:
                 all_symbols_to_check.add(ticker['symbol'])
