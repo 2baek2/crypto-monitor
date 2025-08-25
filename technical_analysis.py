@@ -325,7 +325,7 @@ class TechnicalAnalyzer:
                         rsi_change = current_rsi - past_rsi
                         divergence_signals.append(
                             f"🟢 Regular Bullish Divergence ({timeframe}) - {current_time_str}\n"
-                            f"가격: {price_change:.2f}% 하락, RSI: +{rsi_change:.1f} 상승"
+                            f"가격: {price_change:.2f}% 하락, RSI: +{rsi_change:.1f} 상승 (최근 {i}캔들 비교)"
                         )
                         logger.info(f"{symbol} 즉시 Regular Bullish Divergence 감지: "
                                    f"가격 {price_change:.2f}% 하락, RSI +{rsi_change:.1f}")
@@ -339,7 +339,7 @@ class TechnicalAnalyzer:
                         rsi_change = past_rsi - current_rsi
                         divergence_signals.append(
                             f"🔴 Regular Bearish Divergence ({timeframe}) - {current_time_str}\n"
-                            f"가격: +{price_change:.2f}% 상승, RSI: -{rsi_change:.1f} 하락"
+                            f"가격: +{price_change:.2f}% 상승, RSI: -{rsi_change:.1f} 하락 (최근 {i}캔들 비교)"
                         )
                         logger.info(f"{symbol} 즉시 Regular Bearish Divergence 감지: "
                                    f"가격 +{price_change:.2f}% 상승, RSI -{rsi_change:.1f}")

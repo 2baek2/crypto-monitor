@@ -326,15 +326,7 @@ class CryptoMonitor:
                 
                 for timeframe in div_timeframes:
                     try:
-                        # 기존 다이버전스 감지 (피벗 기반)
-                        divergence_alerts = self.technical_analyzer.detect_rsi_divergence(
-                            symbol=symbol,
-                            timeframe=timeframe,
-                            rsi_period=rsi_period,
-                            lookback_periods=20  # 새로운 파라미터 사용
-                        )
-                        
-                        # 즉시 다이버전스 감지 (실시간)
+                        # 즉시 다이버전스 감지 (실시간) - 더 민감하고 즉시성 있는 감지
                         immediate_alerts = self.technical_analyzer.detect_immediate_rsi_divergence(
                             symbol=symbol,
                             timeframe=timeframe,
@@ -342,8 +334,16 @@ class CryptoMonitor:
                             lookback_periods=10
                         )
                         
-                        # 두 방식의 알림을 합치기
-                        all_divergence_alerts = divergence_alerts + immediate_alerts
+                        # 기존 다이버전스 감지 (lookback 방식) - 더 확실한 신호
+                        lookback_alerts = self.technical_analyzer.detect_rsi_divergence(
+                            symbol=symbol,
+                            timeframe=timeframe,
+                            rsi_period=rsi_period,
+                            lookback_periods=15  # 범위를 줄여서 더 최근 데이터만 사용
+                        )
+                        
+                        # 즉시 감지를 우선하고, lookback은 보조적으로 사용
+                        all_divergence_alerts = immediate_alerts + lookback_alerts
                         
                         # Hidden 다이버전스 필터링
                         if not include_hidden:
@@ -370,8 +370,8 @@ class CryptoMonitor:
                                 alerts.append(divergence_msg)
                                 self.update_alert_cache(cache_key)
                                 
-                        if divergence_alerts:
-                            logger.info(f"다이버전스 신호 발견: {symbol} {timeframe} - {len(divergence_alerts)}개")
+                        if all_divergence_alerts:
+                            logger.info(f"다이버전스 신호 발견: {symbol} {timeframe} - {len(all_divergence_alerts)}개")
                             
                     except Exception as e:
                         logger.error(f"{symbol} {timeframe} 다이버전스 분석 오류: {e}")
