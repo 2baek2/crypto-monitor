@@ -338,7 +338,7 @@ class TechnicalAnalyzer:
                         price_change = ((current_close - past_close) / past_close) * 100
                         rsi_change = past_rsi - current_rsi
                         divergence_signals.append(
-                            f"� Regular Bearish Divergence ({timeframe}) - {current_time_str}\n"
+                            f"🔴 Regular Bearish Divergence ({timeframe}) - {current_time_str}\n"
                             f"가격: +{price_change:.2f}% 상승, RSI: -{rsi_change:.1f} 하락"
                         )
                         logger.info(f"{symbol} 즉시 Regular Bearish Divergence 감지: "
@@ -357,7 +357,7 @@ class TechnicalAnalyzer:
                             price_change = ((current_close - past_close) / past_close) * 100
                             rsi_change = past_rsi - current_rsi
                             divergence_signals.append(
-                                f"� Hidden Bullish Divergence ({timeframe}) - {current_time_str}\n"
+                                f"🔴 Hidden Bullish Divergence ({timeframe}) - {current_time_str}\n"
                                 f"가격: +{price_change:.2f}% 상승, RSI: -{rsi_change:.1f} 하락"
                             )
                             logger.info(f"{symbol} 즉시 Hidden Bullish Divergence 감지: "
