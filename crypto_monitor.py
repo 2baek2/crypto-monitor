@@ -326,24 +326,34 @@ class CryptoMonitor:
                 
                 for timeframe in div_timeframes:
                     try:
+                        # 기존 다이버전스 감지 (피벗 기반)
                         divergence_alerts = self.technical_analyzer.detect_rsi_divergence(
                             symbol=symbol,
                             timeframe=timeframe,
                             rsi_period=rsi_period,
-                            left_bars=left_bars,
-                            right_bars=right_bars,
-                            lookback_range=lookback_range
+                            lookback_periods=20  # 새로운 파라미터 사용
                         )
+                        
+                        # 즉시 다이버전스 감지 (실시간)
+                        immediate_alerts = self.technical_analyzer.detect_immediate_rsi_divergence(
+                            symbol=symbol,
+                            timeframe=timeframe,
+                            rsi_period=rsi_period,
+                            lookback_periods=10
+                        )
+                        
+                        # 두 방식의 알림을 합치기
+                        all_divergence_alerts = divergence_alerts + immediate_alerts
                         
                         # Hidden 다이버전스 필터링
                         if not include_hidden:
-                            divergence_alerts = [
-                                alert for alert in divergence_alerts 
-                                if "Hidden" not in alert
+                            all_divergence_alerts = [
+                                alert for alert in all_divergence_alerts 
+                                if 'Hidden' not in alert
                             ]
                         
                         # 다이버전스 알림에 쿨다운 적용
-                        for divergence_msg in divergence_alerts:
+                        for divergence_msg in all_divergence_alerts:
                             # 다이버전스 타입 추출
                             div_type = "unknown"
                             if "Regular Bullish" in divergence_msg:
